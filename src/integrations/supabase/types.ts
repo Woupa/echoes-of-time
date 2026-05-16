@@ -67,6 +67,8 @@ export type Database = {
           character_id: string
           created_at: string
           id: string
+          is_public: boolean
+          share_token: string
           title: string
           updated_at: string
           user_id: string
@@ -75,6 +77,8 @@ export type Database = {
           character_id: string
           created_at?: string
           id?: string
+          is_public?: boolean
+          share_token?: string
           title?: string
           updated_at?: string
           user_id: string
@@ -83,6 +87,8 @@ export type Database = {
           character_id?: string
           created_at?: string
           id?: string
+          is_public?: boolean
+          share_token?: string
           title?: string
           updated_at?: string
           user_id?: string
@@ -129,7 +135,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_shared_conversation: { Args: { _token: string }; Returns: Json }
     }
     Enums: {
       [_ in never]: never
