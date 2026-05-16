@@ -153,3 +153,44 @@
 .reaction-shake { animation: reaction-shake 0.4s ease-in-out infinite; }
 
 .reaction-breathe { animation: breathe 3s ease-in-out infinite; }
+
+/* ============ SVG Avatar animated states ============ */
+.svg-avatar { width: 100%; height: 100%; display: block; transform-origin: center; }
+.svg-avatar svg { width: 100%; height: 100%; display: block; }
+.svg-avatar [id="head"], .svg-avatar [id="face"] { transform-origin: center; transform-box: fill-box; }
+.svg-avatar [id="mouth"] { transform-origin: center; transform-box: fill-box; }
+.svg-avatar [id="eye-left"], .svg-avatar [id="eye-right"], .svg-avatar [id="eyes"] { transform-origin: center; transform-box: fill-box; }
+.svg-avatar [id="eyebrows"] { transform-origin: center; transform-box: fill-box; }
+.svg-avatar [id="body"] { transform-origin: 50% 100%; transform-box: fill-box; }
+.svg-avatar [id^="accessory"] { transform-origin: center; transform-box: fill-box; }
+
+/* idle — breathing + slow blink */
+@keyframes avatar-idle-breathe { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-2px) scale(1.01); } }
+@keyframes avatar-blink { 0%,92%,100% { transform: scaleY(1);} 95%,97% { transform: scaleY(0.05);} }
+.avatar-idle [id="body"], .avatar-idle [id="head"] { animation: avatar-idle-breathe 4s ease-in-out infinite; }
+.avatar-idle [id="eye-left"], .avatar-idle [id="eye-right"], .avatar-idle [id="eyes"] { animation: avatar-blink 5s ease-in-out infinite; }
+
+/* talking — mouth open/close + head bob */
+@keyframes avatar-talk-mouth { 0%,100% { transform: scaleY(0.4);} 50% { transform: scaleY(1.4);} }
+@keyframes avatar-talk-bob { 0%,100% { transform: translateY(0) rotate(0);} 25% { transform: translateY(-1px) rotate(-1deg);} 75% { transform: translateY(1px) rotate(1deg);} }
+.avatar-talking [id="mouth"] { animation: avatar-talk-mouth 0.32s ease-in-out infinite; }
+.avatar-talking [id="head"] { animation: avatar-talk-bob 0.9s ease-in-out infinite; }
+
+/* thinking — head tilt + eyebrow up */
+@keyframes avatar-think-tilt { 0%,100% { transform: rotate(-4deg);} 50% { transform: rotate(4deg);} }
+@keyframes avatar-think-brow { 0%,100% { transform: translateY(0);} 50% { transform: translateY(-3px);} }
+.avatar-thinking [id="head"] { animation: avatar-think-tilt 2.4s ease-in-out infinite; }
+.avatar-thinking [id="eyebrows"] { animation: avatar-think-brow 2.4s ease-in-out infinite; }
+
+/* listening — slight forward lean + eye widen */
+@keyframes avatar-listen-lean { 0%,100% { transform: scale(1);} 50% { transform: scale(1.04);} }
+.avatar-listening [id="head"] { animation: avatar-listen-lean 2s ease-in-out infinite; }
+.avatar-listening [id="eye-left"], .avatar-listening [id="eye-right"], .avatar-listening [id="eyes"] { transform: scale(1.15); }
+
+/* reacting — micro-bounce */
+@keyframes avatar-react { 0%,100% { transform: scale(1) rotate(0);} 30% { transform: scale(1.08) rotate(-3deg);} 60% { transform: scale(0.96) rotate(2deg);} }
+.avatar-reacting { animation: avatar-react 0.6s ease-out; }
+
+/* special — sparkle wobble on accessories */
+@keyframes avatar-special { 0%,100% { transform: rotate(0) scale(1);} 25% { transform: rotate(-10deg) scale(1.1);} 75% { transform: rotate(10deg) scale(1.1);} }
+.avatar-special [id^="accessory"] { animation: avatar-special 1.2s ease-in-out; }

@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useCharacter } from "@/lib/use-characters";
 import { chatWithCharacter, synthesizeSpeech } from "@/lib/character-generation.functions";
 import type { Reaction } from "@/lib/characters";
+import { AvatarSvg, type AvatarState } from "@/components/AvatarSvg";
 
 export const Route = createFileRoute("/chat/$id")({
   component: Chat,
@@ -22,6 +23,9 @@ function Chat() {
   const [mode, setMode] = useState<"voice" | "text">("voice");
   const [showHistory, setShowHistory] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
+  const [reactingTick, setReactingTick] = useState(0);
+  const [specialTick, setSpecialTick] = useState(0);
   const [currentReactionIdx, setCurrentReactionIdx] = useState<number>(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -29,6 +33,38 @@ function Chat() {
   const reactions: Reaction[] = useMemo(() => character?.reactions ?? [], [character]);
   const currentReaction = reactions[currentReactionIdx];
   const displayAvatar = currentReaction?.imageUrl ?? character?.avatar ?? "";
+
+  // Easter-egg "special" every 25s while idle
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (!isSpeaking && !isThinking) setSpecialTick((n) => n + 1);
+    }, 25000);
+    return () => clearInterval(t);
+  }, [isSpeaking, isThinking]);
+
+  const [pulseState, setPulseState] = useState<AvatarState | null>(null);
+  useEffect(() => {
+    if (reactingTick === 0) return;
+    setPulseState("reacting");
+    const t = setTimeout(() => setPulseState(null), 700);
+    return () => clearTimeout(t);
+  }, [reactingTick]);
+  useEffect(() => {
+    if (specialTick === 0) return;
+    setPulseState("special");
+    const t = setTimeout(() => setPulseState(null), 1300);
+    return () => clearTimeout(t);
+  }, [specialTick]);
+
+  const avatarState: AvatarState = pulseState
+    ? pulseState
+    : isThinking
+      ? "thinking"
+      : isSpeaking
+        ? "talking"
+        : mode === "voice" && input.length === 0
+          ? "listening"
+          : "idle";
 
   useEffect(() => {
     if (character && messages.length === 0) {
@@ -89,7 +125,7 @@ function Chat() {
     const nextMessages: Message[] = [...messages, { role: "user", content: trimmed }];
     setMessages(nextMessages);
     setInput("");
-    setIsSpeaking(true);
+    setIsThinking(true);
 
     try {
       if (isCustom && reactions.length > 0) {
@@ -97,7 +133,9 @@ function Chat() {
         const { reply, reactionIdx } = await chat({
           data: { characterId: id, messages: history },
         });
+        setIsThinking(false);
         setCurrentReactionIdx(reactionIdx);
+        if (/[!?]/.test(reply)) setReactingTick((n) => n + 1);
         setMessages((m) => [
           ...m,
           { role: "assistant", content: reply, reactionIdx },
@@ -107,6 +145,7 @@ function Chat() {
         const nextIdx = reactions.length > 0 ? Math.floor(Math.random() * reactions.length) : 0;
         setCurrentReactionIdx(nextIdx);
         const reactionLabel = reactions[nextIdx]?.label ?? "";
+        setIsThinking(false);
         setMessages((m) => [
           ...m,
           {
@@ -117,6 +156,7 @@ function Chat() {
         ]);
       }
     } catch (err) {
+      setIsThinking(false);
       setMessages((m) => [
         ...m,
         {
@@ -124,8 +164,6 @@ function Chat() {
           content: `Désolé, une erreur est survenue : ${err instanceof Error ? err.message : "inconnue"}`,
         },
       ]);
-    } finally {
-      setIsSpeaking(false);
     }
   };
 
@@ -145,8 +183,19 @@ function Chat() {
       />
       <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/60 to-background" />
 
-      {/* Centered animated reaction portrait (only for custom characters with reactions) */}
-      {currentReaction && (
+      {/* Centered animated avatar (SVG si dispo, sinon portrait de réaction) */}
+      {character.svgAvatar ? (
+        <div className="pointer-events-none absolute left-1/2 top-20 z-10 -translate-x-1/2">
+          <div className="h-56 w-56 overflow-hidden rounded-full shadow-cinema ring-2 ring-gold/40">
+            <AvatarSvg svg={character.svgAvatar} state={avatarState} />
+          </div>
+          {currentReaction && (
+            <p className="mt-3 text-center text-xs uppercase tracking-[0.3em] text-gold/80">
+              {currentReaction.emoji} {currentReaction.label}
+            </p>
+          )}
+        </div>
+      ) : currentReaction ? (
         <div className="pointer-events-none absolute left-1/2 top-24 z-10 -translate-x-1/2">
           <img
             key={currentReactionIdx}
@@ -158,7 +207,7 @@ function Chat() {
             {currentReaction.emoji} {currentReaction.label}
           </p>
         </div>
-      )}
+      ) : null}
 
       {/* Header */}
       <header className="relative z-10 flex items-center justify-between px-5 pt-6">

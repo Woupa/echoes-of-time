@@ -24,6 +24,7 @@ export type Database = {
           id: string
           name: string
           reactions: Json
+          svg_avatar: string | null
           system_prompt: string
           title: string
           user_context: string
@@ -38,6 +39,7 @@ export type Database = {
           id?: string
           name: string
           reactions?: Json
+          svg_avatar?: string | null
           system_prompt: string
           title?: string
           user_context?: string
@@ -52,6 +54,7 @@ export type Database = {
           id?: string
           name?: string
           reactions?: Json
+          svg_avatar?: string | null
           system_prompt?: string
           title?: string
           user_context?: string

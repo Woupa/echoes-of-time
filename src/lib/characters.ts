@@ -20,6 +20,7 @@ export type Character = {
   greeting: string;
   systemPrompt: string;
   reactions?: Reaction[];
+  svgAvatar?: string | null;
   isCustom?: boolean;
 };
 
@@ -74,6 +75,7 @@ export type CharacterRow = {
   system_prompt: string;
   base_avatar_url: string;
   reactions: Reaction[];
+  svg_avatar?: string | null;
 };
 
 export const rowToCharacter = (row: CharacterRow): Character => ({
@@ -86,5 +88,6 @@ export const rowToCharacter = (row: CharacterRow): Character => ({
   greeting: row.greeting,
   systemPrompt: row.system_prompt,
   reactions: row.reactions ?? [],
+  svgAvatar: row.svg_avatar ?? null,
   isCustom: true,
 });
