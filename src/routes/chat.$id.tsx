@@ -167,7 +167,7 @@ function Chat() {
     return () => clearTimeout(tm);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [character?.id]);
-
+  const toggleMute = () => {
     setMuted((prev) => {
       const next = !prev;
       if (typeof window !== "undefined") {
