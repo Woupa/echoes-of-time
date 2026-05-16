@@ -3,7 +3,7 @@ import { Mic, Keyboard, History, Film, Bookmark, PhoneOff, Send, X, Loader2 } fr
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useCharacter } from "@/lib/use-characters";
-import { chatWithCharacter } from "@/lib/character-generation.functions";
+import { chatWithCharacter, synthesizeSpeech } from "@/lib/character-generation.functions";
 import type { Reaction } from "@/lib/characters";
 
 export const Route = createFileRoute("/chat/$id")({
@@ -64,7 +64,24 @@ function Chat() {
   }
 
   const chat = useServerFn(chatWithCharacter);
+  const speak = useServerFn(synthesizeSpeech);
   const isCustom = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const playReply = async (text: string) => {
+    if (!isCustom || !text.trim()) return;
+    try {
+      const { audio, mime } = await speak({ data: { characterId: id, text } });
+      const url = `data:${mime};base64,${audio}`;
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = url;
+        await audioRef.current.play().catch(() => {});
+      }
+    } catch (err) {
+      console.error("TTS error:", err);
+    }
+  };
 
   const send = async (text: string) => {
     const trimmed = text.trim();
@@ -85,6 +102,7 @@ function Chat() {
           ...m,
           { role: "assistant", content: reply, reactionIdx },
         ]);
+        void playReply(reply);
       } else {
         const nextIdx = reactions.length > 0 ? Math.floor(Math.random() * reactions.length) : 0;
         setCurrentReactionIdx(nextIdx);
@@ -115,6 +133,7 @@ function Chat() {
 
   return (
     <div className="vignette relative flex min-h-screen flex-col overflow-hidden bg-background">
+      <audio ref={audioRef} hidden onPlay={() => setIsSpeaking(true)} onEnded={() => setIsSpeaking(false)} onPause={() => setIsSpeaking(false)} />
       {/* Avatar background (reaction-aware) */}
       <div
         className="absolute inset-0 transition-all duration-700"

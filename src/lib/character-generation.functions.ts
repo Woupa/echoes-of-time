@@ -92,6 +92,77 @@ Choisis les 6 réactions qui révèlent VRAIMENT ce personnage (ex pour Einstein
   return parsed;
 }
 
+type GradiumVoice = {
+  uid: string;
+  name: string;
+  description?: string | null;
+  language?: string | null;
+  tags?: { name?: string; value?: string }[];
+};
+
+async function listGradiumVoices(): Promise<GradiumVoice[]> {
+  const apiKey = process.env.Gradium;
+  if (!apiKey) throw new Error("Clé Gradium manquante côté serveur.");
+  const res = await fetch(
+    "https://api.gradium.ai/api/voices/?include_catalog=true&limit=200",
+    { headers: { "x-api-key": apiKey } },
+  );
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`Gradium voices ${res.status}: ${txt.slice(0, 200)}`);
+  }
+  return (await res.json()) as GradiumVoice[];
+}
+
+async function pickVoiceWithGpt(args: {
+  name: string;
+  era: string;
+  userContext: string;
+  basePortraitPrompt: string;
+  voices: GradiumVoice[];
+}): Promise<string> {
+  const apiKey = process.env.ChatGPT;
+  if (!apiKey) throw new Error("Clé ChatGPT manquante côté serveur.");
+
+  const compact = args.voices.map((v) => ({
+    uid: v.uid,
+    name: v.name,
+    language: v.language ?? null,
+    description: (v.description ?? "").slice(0, 160),
+  }));
+
+  const system = `Tu es directeur de casting vocal. On te donne un personnage et une liste de voix (catalogue TTS). Choisis LA voix la plus adaptée à son époque, sa langue (préférer 'fr' si le personnage parle français, sinon 'en'), son genre et son tempérament. Réponds STRICTEMENT en JSON : {"uid": "<voice uid>"}.`;
+  const user = `Personnage : ${args.name}
+Époque : ${args.era}
+Contexte : ${args.userContext}
+Description visuelle : ${args.basePortraitPrompt}
+
+Voix disponibles (JSON) :
+${JSON.stringify(compact)}`;
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.4,
+    }),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`OpenAI voix ${res.status}: ${txt.slice(0, 200)}`);
+  }
+  const j = await res.json();
+  const parsed = JSON.parse(j.choices?.[0]?.message?.content ?? "{}") as { uid?: string };
+  const chosen = args.voices.find((v) => v.uid === parsed.uid);
+  return (chosen ?? args.voices[0]).uid;
+}
+
 async function generateFalImage(prompt: string): Promise<ArrayBuffer> {
   const apiKey = process.env.Fal;
   if (!apiKey) throw new Error("Clé Fal manquante côté serveur.");
@@ -169,7 +240,23 @@ export const generateCharacter = createServerFn({ method: "POST" })
     const characterId = inserted.id as string;
 
     try {
-      // 3) Générer le portrait de base + 6 réactions en parallèle
+      // 3) Choix de la voix Gradium en parallèle des images
+      const voicesPromise = listGradiumVoices()
+        .then((voices) =>
+          pickVoiceWithGpt({
+            name,
+            era,
+            userContext,
+            basePortraitPrompt: plan.basePortraitPrompt,
+            voices,
+          }),
+        )
+        .catch((err) => {
+          console.error("Voice pick failed:", err);
+          return null;
+        });
+
+      // 4) Générer le portrait de base + 6 réactions en parallèle
       const cinematicSuffix =
         ", sepia cinematic tone, soft warm lighting, shallow depth of field, portrait centered on face and shoulders, photorealistic, film grain";
 
@@ -197,12 +284,15 @@ export const generateCharacter = createServerFn({ method: "POST" })
         imageUrl: reactionUrls[i],
       }));
 
-      // 4) Update record
+      const voiceId = await voicesPromise;
+
+      // 5) Update record
       const { error: updateErr } = await supabaseAdmin
         .from("characters")
         .update({
           base_avatar_url: baseUrl,
           reactions: reactionsData,
+          voice_id: voiceId,
         })
         .eq("id", characterId);
       if (updateErr) throw new Error(`DB update : ${updateErr.message}`);
@@ -309,4 +399,52 @@ export const getCustomCharacter = createServerFn({ method: "GET" })
       .single();
     if (error) throw new Error(error.message);
     return row;
+  });
+
+const SpeakInput = z.object({
+  characterId: z.string().uuid(),
+  text: z.string().min(1).max(2000),
+});
+
+export const synthesizeSpeech = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => SpeakInput.parse(input))
+  .handler(async ({ data }) => {
+    const apiKey = process.env.Gradium;
+    if (!apiKey) throw new Error("Clé Gradium manquante côté serveur.");
+
+    const { data: char, error } = await supabaseAdmin
+      .from("characters")
+      .select("voice_id")
+      .eq("id", data.characterId)
+      .single();
+    if (error || !char) throw new Error(`Personnage introuvable : ${error?.message}`);
+    const voiceId = (char.voice_id as string | null) ?? "YTpq7expH9539ERJ";
+
+    const res = await fetch("https://api.gradium.ai/api/post/speech/tts", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text: data.text,
+        voice_id: voiceId,
+        output_format: "wav",
+        only_audio: true,
+      }),
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`Gradium TTS ${res.status}: ${txt.slice(0, 200)}`);
+    }
+    const buf = await res.arrayBuffer();
+    // base64 encode
+    const bytes = new Uint8Array(buf);
+    let binary = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    const base64 = btoa(binary);
+    return { audio: base64, mime: "audio/wav" };
   });
