@@ -7,6 +7,7 @@ import { useAllCharacters } from "@/lib/use-characters";
 import { deleteCustomCharacter } from "@/lib/character-generation.functions";
 import { useAuth } from "@/lib/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { LangToggle, useT } from "@/lib/i18n";
 
 export const Route = createFileRoute("/select")({
   component: Select,
