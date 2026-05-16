@@ -208,7 +208,7 @@ async function generateFalImage(prompt: string): Promise<ArrayBuffer> {
   const apiKey = process.env.Fal;
   if (!apiKey) throw new Error("Clé Fal manquante côté serveur.");
 
-  const res = await fetch("https://fal.run/fal-ai/flux/schnell", {
+  const res = await fetch("https://fal.run/fal-ai/flux-pro/v1.1", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -217,9 +217,10 @@ async function generateFalImage(prompt: string): Promise<ArrayBuffer> {
     body: JSON.stringify({
       prompt,
       image_size: "square_hd",
-      num_inference_steps: 4,
       num_images: 1,
-      enable_safety_checker: true,
+      safety_tolerance: "6",
+      output_format: "jpeg",
+      enable_safety_checker: false,
     }),
   });
 
