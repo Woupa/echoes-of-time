@@ -1,9 +1,9 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { Mic, Keyboard, History, Film, Bookmark, PhoneOff, Send, X, Loader2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Mic, MicOff, Keyboard, History, Film, Bookmark, PhoneOff, Send, X, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useCharacter } from "@/lib/use-characters";
-import { chatWithCharacter, synthesizeSpeech } from "@/lib/character-generation.functions";
+import { chatWithCharacter, synthesizeSpeech, transcribeAudio } from "@/lib/character-generation.functions";
 import type { Reaction } from "@/lib/characters";
 import { AvatarSvg, type AvatarState } from "@/components/AvatarSvg";
 
@@ -27,6 +27,9 @@ function Chat() {
   const [reactingTick, setReactingTick] = useState(0);
   const [specialTick, setSpecialTick] = useState(0);
   const [currentReactionIdx, setCurrentReactionIdx] = useState<number>(0);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -58,11 +61,11 @@ function Chat() {
 
   const avatarState: AvatarState = pulseState
     ? pulseState
-    : isThinking
+    : isThinking || isTranscribing
       ? "thinking"
       : isSpeaking
         ? "talking"
-        : mode === "voice" && input.length === 0
+        : isRecording || (mode === "voice" && input.length === 0)
           ? "listening"
           : "idle";
 
@@ -85,8 +88,12 @@ function Chat() {
 
   const chat = useServerFn(chatWithCharacter);
   const speak = useServerFn(synthesizeSpeech);
+  const transcribe = useServerFn(transcribeAudio);
   const isCustom = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
 
   if (isLoading) {
     return (
@@ -165,6 +172,86 @@ function Chat() {
         },
       ]);
     }
+  };
+
+  const stopRecording = useCallback(() => {
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== "inactive") mr.stop();
+  }, []);
+
+  const startRecording = useCallback(async () => {
+    setMicError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      recordedChunksRef.current = [];
+
+      const mimeCandidates = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+        "audio/ogg;codecs=opus",
+      ];
+      const supported = mimeCandidates.find((m) =>
+        typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported?.(m),
+      );
+      const mr = new MediaRecorder(stream, supported ? { mimeType: supported } : undefined);
+      mediaRecorderRef.current = mr;
+
+      mr.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
+      };
+      mr.onstop = async () => {
+        const tracks = mediaStreamRef.current?.getTracks() ?? [];
+        tracks.forEach((t) => t.stop());
+        mediaStreamRef.current = null;
+        setIsRecording(false);
+
+        const chunks = recordedChunksRef.current;
+        if (chunks.length === 0) return;
+        const blob = new Blob(chunks, { type: mr.mimeType || "audio/webm" });
+        if (blob.size < 800) return; // too short
+
+        setIsTranscribing(true);
+        try {
+          const buf = await blob.arrayBuffer();
+          const bytes = new Uint8Array(buf);
+          let bin = "";
+          const CH = 0x8000;
+          for (let i = 0; i < bytes.length; i += CH) {
+            bin += String.fromCharCode(...bytes.subarray(i, i + CH));
+          }
+          const b64 = btoa(bin);
+          const { text } = await transcribe({
+            data: { audioBase64: b64, mime: blob.type || "audio/webm" },
+          });
+          setIsTranscribing(false);
+          if (text) await send(text);
+        } catch (err) {
+          setIsTranscribing(false);
+          setMicError(err instanceof Error ? err.message : "Transcription échouée");
+        }
+      };
+
+      mr.start();
+      setIsRecording(true);
+    } catch (err) {
+      setMicError(err instanceof Error ? err.message : "Accès micro refusé");
+      setIsRecording(false);
+    }
+  }, [transcribe]);
+
+  useEffect(() => {
+    return () => {
+      const mr = mediaRecorderRef.current;
+      if (mr && mr.state !== "inactive") mr.stop();
+      mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  const toggleMic = () => {
+    if (isRecording) stopRecording();
+    else void startRecording();
   };
 
   const last = messages[messages.length - 1];
@@ -276,6 +363,14 @@ function Chat() {
         </div>
       )}
 
+      {micError && (
+        <div className="absolute inset-x-0 bottom-36 z-20 mx-auto max-w-md px-6">
+          <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-center text-xs text-destructive">
+            {micError}
+          </div>
+        </div>
+      )}
+
       {/* Action bar */}
       <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-background via-background/95 to-transparent pb-8 pt-12">
         <div className="mx-auto flex max-w-md items-center justify-around px-6">
@@ -285,7 +380,16 @@ function Chat() {
             onClick={() => setMode(mode === "voice" ? "text" : "voice")}
             active
           />
-          <ActionButton icon={<Film />} label="Scène" onClick={() => send("Imagine une scène : que feriez-vous aujourd'hui ?")} />
+          {mode === "voice" ? (
+            <ActionButton
+              icon={isRecording ? <MicOff /> : isTranscribing ? <Loader2 className="animate-spin" /> : <Mic />}
+              label={isRecording ? "Stop" : isTranscribing ? "Transcrit…" : "Parler"}
+              onClick={toggleMic}
+              active={isRecording}
+            />
+          ) : (
+            <ActionButton icon={<Film />} label="Scène" onClick={() => send("Imagine une scène : que feriez-vous aujourd'hui ?")} />
+          )}
 
           <button
             onClick={() => navigate({ to: "/select" })}
