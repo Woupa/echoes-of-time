@@ -219,21 +219,16 @@ export const generateCharacter = createServerFn({ method: "POST" })
     const characterId = inserted.id as string;
 
     try {
-      // 3) Choix de la voix Gradium en parallèle des images
-      const voicesPromise = listGradiumVoices()
-        .then((voices) =>
-          pickVoiceWithGpt({
-            name,
-            era,
-            userContext,
-            basePortraitPrompt: plan.basePortraitPrompt,
-            voices,
-          }),
-        )
-        .catch((err) => {
-          console.error("Voice pick failed:", err);
-          return null;
-        });
+      // 3) Choix de la voix SLNG (Rime Arcana FR) en parallèle des images
+      const voicesPromise = pickSlngSpeakerWithGpt({
+        name,
+        era,
+        userContext,
+        basePortraitPrompt: plan.basePortraitPrompt,
+      }).catch((err: unknown) => {
+        console.error("Voice pick failed:", err);
+        return null;
+      });
 
       // 4) Générer le portrait de base + 6 réactions en parallèle
       const cinematicSuffix =
