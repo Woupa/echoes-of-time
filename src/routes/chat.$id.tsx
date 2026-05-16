@@ -63,30 +63,52 @@ function Chat() {
     );
   }
 
+  const chat = useServerFn(chatWithCharacter);
+  const isCustom = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
   const send = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    setMessages((m) => [...m, { role: "user", content: trimmed }]);
+    const nextMessages: Message[] = [...messages, { role: "user", content: trimmed }];
+    setMessages(nextMessages);
     setInput("");
-
-    // Pick a reaction (random for now; will be set by LLM later)
-    const nextIdx = reactions.length > 0 ? Math.floor(Math.random() * reactions.length) : 0;
-    setCurrentReactionIdx(nextIdx);
-
-    // TODO: branche ici l'appel API (Sonnet via Vercel)
     setIsSpeaking(true);
-    setTimeout(() => {
-      const reactionLabel = reactions[nextIdx]?.label ?? "";
+
+    try {
+      if (isCustom && reactions.length > 0) {
+        const history = nextMessages.map((m) => ({ role: m.role, content: m.content }));
+        const { reply, reactionIdx } = await chat({
+          data: { characterId: id, messages: history },
+        });
+        setCurrentReactionIdx(reactionIdx);
+        setMessages((m) => [
+          ...m,
+          { role: "assistant", content: reply, reactionIdx },
+        ]);
+      } else {
+        const nextIdx = reactions.length > 0 ? Math.floor(Math.random() * reactions.length) : 0;
+        setCurrentReactionIdx(nextIdx);
+        const reactionLabel = reactions[nextIdx]?.label ?? "";
+        setMessages((m) => [
+          ...m,
+          {
+            role: "assistant",
+            content: `(${character.name}${reactionLabel ? ` — ${reactionLabel}` : ""}) Connectez l'API LLM pour activer la réponse complète.`,
+            reactionIdx: nextIdx,
+          },
+        ]);
+      }
+    } catch (err) {
       setMessages((m) => [
         ...m,
         {
           role: "assistant",
-          content: `(${character.name}${reactionLabel ? ` — ${reactionLabel}` : ""}) Connectez l'API LLM pour activer la réponse complète.`,
-          reactionIdx: nextIdx,
+          content: `Désolé, une erreur est survenue : ${err instanceof Error ? err.message : "inconnue"}`,
         },
       ]);
+    } finally {
       setIsSpeaking(false);
-    }, 1400);
+    }
   };
 
   const last = messages[messages.length - 1];
