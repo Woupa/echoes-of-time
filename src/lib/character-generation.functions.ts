@@ -734,8 +734,7 @@ const BUILT_IN_CHAT_CHARACTERS: Record<string, BuiltInChat> = {
 export const chatWithCharacter = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => ChatInput.parse(input))
   .handler(async ({ data }) => {
-    const apiKey = process.env.PIONEER_API_KEY;
-    if (!apiKey && !process.env.ChatGPT) {
+    if (!process.env.PIONEER_API_KEY && !process.env.ChatGPT) {
       throw new Error("Aucun LLM configuré côté serveur (PIONEER_API_KEY ni ChatGPT).");
     }
     const lang: "fr" | "en" = data.lang === "en" ? "en" : "fr";
