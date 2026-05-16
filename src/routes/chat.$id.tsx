@@ -485,6 +485,25 @@ function Chat() {
 
   const last = messages[messages.length - 1];
 
+  const handleExportTxt = () => {
+    const charName = character?.name ?? "personnage";
+    const date = new Date();
+    const header = `Conversation avec ${charName}\n${date.toLocaleString()}\n${"=".repeat(40)}\n\n`;
+    const body = messages
+      .map((m) => `${m.role === "user" ? t("you") : charName}:\n${m.content}\n`)
+      .join("\n");
+    const blob = new Blob([header + body], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const safe = charName.toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
+    a.href = url;
+    a.download = `conversation-${safe}-${date.toISOString().slice(0, 10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="vignette relative flex min-h-screen flex-col overflow-hidden bg-background">
       <audio ref={audioRef} hidden onPlay={() => setIsSpeaking(true)} onEnded={() => setIsSpeaking(false)} onPause={() => setIsSpeaking(false)} />
