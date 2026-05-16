@@ -320,7 +320,20 @@ export const generateCharacter = createServerFn({ method: "POST" })
         imageUrl: reactionUrls[i],
       }));
 
+      // 3bis) SVG avatar animé en parallèle
+      const svgPromise = generateSvgAvatar({
+        name,
+        era,
+        userContext,
+        basePortraitPrompt: plan.basePortraitPrompt,
+        accent: plan.accent || "#d4af6e",
+      }).catch((err: unknown) => {
+        console.error("SVG avatar failed:", err);
+        return null;
+      });
+
       const voiceId = await voicesPromise;
+      const svgAvatar = await svgPromise;
 
       // 5) Update record
       const { error: updateErr } = await supabaseAdmin
@@ -329,6 +342,7 @@ export const generateCharacter = createServerFn({ method: "POST" })
           base_avatar_url: baseUrl,
           reactions: reactionsData,
           voice_id: voiceId,
+          svg_avatar: svgAvatar,
         })
         .eq("id", characterId);
       if (updateErr) throw new Error(`DB update : ${updateErr.message}`);
