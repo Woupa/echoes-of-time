@@ -5,6 +5,71 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 const ANIMATIONS = ["pulse", "shake", "bounce", "breathe", "tilt", "glow", "shimmer"] as const;
 type Animation = (typeof ANIMATIONS)[number];
 
+// ===== LLM helper: Pioneer (primary) + ChatGPT (fallback) =====
+const PIONEER_MODEL = "3143d855-95b1-4da7-afad-d579fcd3d5ed";
+
+async function callLlm(opts: {
+  messages: { role: string; content: string }[];
+  jsonMode?: boolean;
+  temperature?: number;
+}): Promise<string> {
+  const pioneerKey = process.env.PIONEER_API_KEY;
+  const openaiKey = process.env.ChatGPT;
+  if (!pioneerKey && !openaiKey) {
+    throw new Error("Aucun LLM configuré côté serveur (PIONEER_API_KEY ni ChatGPT).");
+  }
+
+  if (pioneerKey) {
+    try {
+      const res = await fetch("https://api.pioneer.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${pioneerKey}`,
+        },
+        body: JSON.stringify({
+          model: PIONEER_MODEL,
+          messages: opts.messages,
+          stream: false,
+        }),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`Pioneer ${res.status}: ${txt.slice(0, 200)}`);
+      }
+      const j = await res.json();
+      const content = j.choices?.[0]?.message?.content;
+      if (!content) throw new Error("Pioneer réponse vide");
+      return content as string;
+    } catch (err) {
+      if (!openaiKey) throw err;
+      console.warn("[llm] Pioneer KO, fallback ChatGPT:", err);
+    }
+  }
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${openaiKey!}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: opts.messages,
+      ...(opts.jsonMode ? { response_format: { type: "json_object" } } : {}),
+      temperature: opts.temperature ?? 0.7,
+    }),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`ChatGPT ${res.status}: ${txt.slice(0, 200)}`);
+  }
+  const j = await res.json();
+  const content = j.choices?.[0]?.message?.content;
+  if (!content) throw new Error("ChatGPT réponse vide");
+  return content as string;
+}
+
 export type ReactionData = {
   label: string;
   emoji: string;
