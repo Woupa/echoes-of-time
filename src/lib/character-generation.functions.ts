@@ -293,15 +293,22 @@ export const generateCharacter = createServerFn({ method: "POST" })
         return null;
       });
 
-      // 4) Générer le portrait de base + 6 réactions en parallèle
+      // 4) Générer le portrait de base + 6 réactions en parallèle.
+      // On force le nom en tête au cas où GPT l'aurait omis du prompt visuel.
       const cinematicSuffix =
-        ", sepia cinematic tone, soft warm lighting, shallow depth of field, portrait centered on face and shoulders, photorealistic, film grain";
+        ", sepia cinematic tone, soft warm lighting, shallow depth of field, portrait centered on face and shoulders, hyper detailed photorealistic, film grain, unmistakably recognizable likeness";
+      const ensureName = (p: string) => {
+        const lower = p.toLowerCase();
+        return lower.includes(data.name.toLowerCase())
+          ? p
+          : `Photorealistic portrait of ${data.name}, ${p}`;
+      };
 
       const tasks = [
-        { key: "base", prompt: plan.basePortraitPrompt + cinematicSuffix },
+        { key: "base", prompt: ensureName(plan.basePortraitPrompt) + cinematicSuffix },
         ...plan.reactions.map((r, i) => ({
           key: `reaction-${i}`,
-          prompt: r.visualPrompt + cinematicSuffix,
+          prompt: ensureName(r.visualPrompt) + cinematicSuffix,
         })),
       ];
 
