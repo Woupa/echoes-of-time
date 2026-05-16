@@ -253,133 +253,107 @@ async function uploadSprite(
   return data.publicUrl;
 }
 
-async function runFullGeneration(name: string, era: string, userContext: string): Promise<string> {
-  // 1) ChatGPT : enrichir + 6 réactions
-  const plan = await callChatGpt(name, era, userContext);
-
-  // 2) Pré-créer l'ID pour structurer le storage
-  const { data: inserted, error: insertErr } = await supabaseAdmin
-    .from("characters")
-    .insert({
-      name,
-      era,
-      user_context: userContext,
-      title: plan.title || "",
-      accent: plan.accent || "#d4af6e",
-      greeting: plan.greeting || "",
-      system_prompt: plan.systemPrompt || "",
-      base_avatar_url: "",
-      reactions: [],
-    })
-    .select("id")
-    .single();
-  if (insertErr || !inserted) throw new Error(`DB insert : ${insertErr?.message ?? "inconnu"}`);
-  const characterId = inserted.id as string;
-
-  try {
-    const voicesPromise = pickSlngSpeakerWithGpt({
-      name,
-      era,
-      userContext,
-      basePortraitPrompt: plan.basePortraitPrompt,
-    }).catch((err: unknown) => {
-      console.error("Voice pick failed:", err);
-      return null;
-    });
-
-    const cinematicSuffix =
-      ", sepia cinematic tone, soft warm lighting, shallow depth of field, portrait centered on face and shoulders, photorealistic, film grain";
-
-    const tasks = [
-      { key: "base", prompt: plan.basePortraitPrompt + cinematicSuffix },
-      ...plan.reactions.map((r, i) => ({
-        key: `reaction-${i}`,
-        prompt: r.visualPrompt + cinematicSuffix,
-      })),
-    ];
-
-    const buffers = await Promise.all(tasks.map((t) => generateFalImage(t.prompt)));
-    const urls = await Promise.all(
-      tasks.map((t, i) => uploadSprite(characterId, `${t.key}.jpg`, buffers[i])),
-    );
-
-    const baseUrl = urls[0];
-    const reactionUrls = urls.slice(1);
-
-    const reactionsData: ReactionData[] = plan.reactions.map((r, i) => ({
-      label: r.label,
-      emoji: r.emoji,
-      animation: r.animation,
-      description: r.description,
-      imageUrl: reactionUrls[i],
-    }));
-
-    const svgPromise = generateSvgAvatar({
-      name,
-      era,
-      userContext,
-      basePortraitPrompt: plan.basePortraitPrompt,
-      accent: plan.accent || "#d4af6e",
-    }).catch((err: unknown) => {
-      console.error("SVG avatar failed:", err);
-      return null;
-    });
-
-    const voiceId = await voicesPromise;
-    const svgAvatar = await svgPromise;
-
-    const { error: updateErr } = await supabaseAdmin
-      .from("characters")
-      .update({
-        base_avatar_url: baseUrl,
-        reactions: reactionsData,
-        voice_id: voiceId,
-        svg_avatar: svgAvatar,
-      })
-      .eq("id", characterId);
-    if (updateErr) throw new Error(`DB update : ${updateErr.message}`);
-
-    return characterId;
-  } catch (err) {
-    await supabaseAdmin.from("characters").delete().eq("id", characterId);
-    throw err;
-  }
-}
-
 export const generateCharacter = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }) => {
-    const id = await runFullGeneration(data.name, data.era, data.userContext);
-    return { id };
-  });
+    const { name, era, userContext } = data;
 
-const PregenInput = z.object({
-  name: z.string().min(1).max(120),
-  era: z.string().min(1).max(80),
-  userContext: z.string().min(10).max(2000),
-});
+    // 1) ChatGPT : enrichir + 6 réactions
+    const plan = await callChatGpt(name, era, userContext);
 
-export const pregenerateBuiltin = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => PregenInput.parse(input))
-  .handler(async ({ data }) => {
-    // Skip if a row with this name already has svg + reactions
-    const { data: existing } = await supabaseAdmin
+    // 2) Pré-créer l'ID pour structurer le storage
+    const { data: inserted, error: insertErr } = await supabaseAdmin
       .from("characters")
-      .select("id, svg_avatar, reactions")
-      .eq("name", data.name)
-      .limit(1)
-      .maybeSingle();
-    if (existing && existing.svg_avatar && Array.isArray(existing.reactions) && existing.reactions.length > 0) {
-      return { id: existing.id as string, skipped: true };
-    }
-    // If a row exists but is incomplete, drop it then regenerate cleanly
-    if (existing?.id) {
-      await supabaseAdmin.from("characters").delete().eq("id", existing.id);
-    }
-    const id = await runFullGeneration(data.name, data.era, data.userContext);
-    return { id, skipped: false };
-  });
+      .insert({
+        name,
+        era,
+        user_context: userContext,
+        title: plan.title || "",
+        accent: plan.accent || "#d4af6e",
+        greeting: plan.greeting || "",
+        system_prompt: plan.systemPrompt || "",
+        base_avatar_url: "",
+        reactions: [],
+      })
+      .select("id")
+      .single();
+    if (insertErr || !inserted) throw new Error(`DB insert : ${insertErr?.message ?? "inconnu"}`);
+    const characterId = inserted.id as string;
 
+    try {
+      // 3) Choix de la voix SLNG (Rime Arcana FR) en parallèle des images
+      const voicesPromise = pickSlngSpeakerWithGpt({
+        name,
+        era,
+        userContext,
+        basePortraitPrompt: plan.basePortraitPrompt,
+      }).catch((err: unknown) => {
+        console.error("Voice pick failed:", err);
+        return null;
+      });
+
+      // 4) Générer le portrait de base + 6 réactions en parallèle
+      const cinematicSuffix =
+        ", sepia cinematic tone, soft warm lighting, shallow depth of field, portrait centered on face and shoulders, photorealistic, film grain";
+
+      const tasks = [
+        { key: "base", prompt: plan.basePortraitPrompt + cinematicSuffix },
+        ...plan.reactions.map((r, i) => ({
+          key: `reaction-${i}`,
+          prompt: r.visualPrompt + cinematicSuffix,
+        })),
+      ];
+
+      const buffers = await Promise.all(tasks.map((t) => generateFalImage(t.prompt)));
+      const urls = await Promise.all(
+        tasks.map((t, i) => uploadSprite(characterId, `${t.key}.jpg`, buffers[i])),
+      );
+
+      const baseUrl = urls[0];
+      const reactionUrls = urls.slice(1);
+
+      const reactionsData: ReactionData[] = plan.reactions.map((r, i) => ({
+        label: r.label,
+        emoji: r.emoji,
+        animation: r.animation,
+        description: r.description,
+        imageUrl: reactionUrls[i],
+      }));
+
+      // 3bis) SVG avatar animé en parallèle
+      const svgPromise = generateSvgAvatar({
+        name,
+        era,
+        userContext,
+        basePortraitPrompt: plan.basePortraitPrompt,
+        accent: plan.accent || "#d4af6e",
+      }).catch((err: unknown) => {
+        console.error("SVG avatar failed:", err);
+        return null;
+      });
+
+      const voiceId = await voicesPromise;
+      const svgAvatar = await svgPromise;
+
+      // 5) Update record
+      const { error: updateErr } = await supabaseAdmin
+        .from("characters")
+        .update({
+          base_avatar_url: baseUrl,
+          reactions: reactionsData,
+          voice_id: voiceId,
+          svg_avatar: svgAvatar,
+        })
+        .eq("id", characterId);
+      if (updateErr) throw new Error(`DB update : ${updateErr.message}`);
+
+      return { id: characterId };
+    } catch (err) {
+      // Rollback : supprimer le perso si la génération échoue
+      await supabaseAdmin.from("characters").delete().eq("id", characterId);
+      throw err;
+    }
+  });
 
 const ListInput = z.object({}).optional();
 
