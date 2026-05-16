@@ -212,11 +212,12 @@ function Chat() {
       mediaStreamRef.current = stream;
       recordedChunksRef.current = [];
 
+      // Gradium STT rejects codec parameters (e.g. "audio/webm;codecs=opus").
+      // Prefer container-only MIME types it accepts.
       const mimeCandidates = [
-        "audio/webm;codecs=opus",
-        "audio/webm",
         "audio/mp4",
-        "audio/ogg;codecs=opus",
+        "audio/webm",
+        "audio/ogg",
       ];
       const supported = mimeCandidates.find((m) =>
         typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported?.(m),
@@ -235,7 +236,10 @@ function Chat() {
 
         const chunks = recordedChunksRef.current;
         if (chunks.length === 0) return;
-        const blob = new Blob(chunks, { type: mr.mimeType || "audio/webm" });
+        const rawType = mr.mimeType || "audio/webm";
+        // Strip codec parameter — Gradium rejects "audio/webm;codecs=opus".
+        const cleanType = rawType.split(";")[0].trim() || "audio/webm";
+        const blob = new Blob(chunks, { type: cleanType });
         if (blob.size < 800) return; // too short
 
         setIsTranscribing(true);
@@ -249,7 +253,7 @@ function Chat() {
           }
           const b64 = btoa(bin);
           const { text } = await transcribe({
-            data: { audioBase64: b64, mime: blob.type || "audio/webm" },
+            data: { audioBase64: b64, mime: cleanType },
           });
           setIsTranscribing(false);
           if (text) await send(text);
