@@ -113,3 +113,43 @@
   80% { transform: rotate(6deg); }
 }
 .animate-shake { animation: shake 0.6s ease-in-out infinite; }
+
+/* Reaction animations */
+@keyframes reaction-pulse {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.04); filter: brightness(1.1); }
+}
+.reaction-pulse { animation: reaction-pulse 1.6s ease-in-out infinite; }
+
+@keyframes reaction-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.reaction-bounce { animation: reaction-bounce 1.2s ease-in-out infinite; }
+
+@keyframes reaction-tilt {
+  0%, 100% { transform: rotate(-2deg); }
+  50% { transform: rotate(2deg); }
+}
+.reaction-tilt { animation: reaction-tilt 2.4s ease-in-out infinite; }
+
+@keyframes reaction-glow {
+  0%, 100% { box-shadow: 0 0 30px -5px var(--color-gold); }
+  50% { box-shadow: 0 0 70px 0 var(--color-gold); }
+}
+.reaction-glow { animation: reaction-glow 2s ease-in-out infinite; }
+
+@keyframes reaction-shimmer {
+  0%, 100% { filter: brightness(1) saturate(1); }
+  50% { filter: brightness(1.2) saturate(1.3); }
+}
+.reaction-shimmer { animation: reaction-shimmer 2.4s ease-in-out infinite; }
+
+@keyframes reaction-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  75% { transform: translateX(3px); }
+}
+.reaction-shake { animation: reaction-shake 0.4s ease-in-out infinite; }
+
+.reaction-breathe { animation: breathe 3s ease-in-out infinite; }

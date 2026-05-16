@@ -2,6 +2,14 @@ import napoleon from "@/assets/napoleon.jpg";
 import einstein from "@/assets/einstein.jpg";
 import mj from "@/assets/mj.jpg";
 
+export type Reaction = {
+  label: string;
+  emoji: string;
+  animation: "pulse" | "shake" | "bounce" | "breathe" | "tilt" | "glow" | "shimmer";
+  description: string;
+  imageUrl: string;
+};
+
 export type Character = {
   id: string;
   name: string;
@@ -11,6 +19,8 @@ export type Character = {
   accent: string;
   greeting: string;
   systemPrompt: string;
+  reactions?: Reaction[];
+  isCustom?: boolean;
 };
 
 export const CHARACTERS: Character[] = [
@@ -50,3 +60,31 @@ export const CHARACTERS: Character[] = [
 ];
 
 export const getCharacter = (id: string) => CHARACTERS.find((c) => c.id === id);
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const isCustomId = (id: string) => UUID_RE.test(id);
+
+export type CharacterRow = {
+  id: string;
+  name: string;
+  era: string;
+  title: string;
+  accent: string;
+  greeting: string;
+  system_prompt: string;
+  base_avatar_url: string;
+  reactions: Reaction[];
+};
+
+export const rowToCharacter = (row: CharacterRow): Character => ({
+  id: row.id,
+  name: row.name,
+  era: row.era,
+  title: row.title,
+  avatar: row.base_avatar_url,
+  accent: row.accent,
+  greeting: row.greeting,
+  systemPrompt: row.system_prompt,
+  reactions: row.reactions ?? [],
+  isCustom: true,
+});

@@ -1,35 +1,41 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { Mic, Keyboard, History, Film, Bookmark, PhoneOff, Send, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { getCharacter } from "@/lib/characters";
+import { Mic, Keyboard, History, Film, Bookmark, PhoneOff, Send, X, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useCharacter } from "@/lib/use-characters";
+import type { Reaction } from "@/lib/characters";
 
 export const Route = createFileRoute("/chat/$id")({
   component: Chat,
 });
 
-type Message = { role: "user" | "assistant"; content: string; saved?: boolean };
+type Message = { role: "user" | "assistant"; content: string; saved?: boolean; reactionIdx?: number };
 
 function Chat() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
-  const character = getCharacter(id);
+  const { character, isLoading } = useCharacter(id);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<"voice" | "text">("voice");
   const [showHistory, setShowHistory] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [currentReactionIdx, setCurrentReactionIdx] = useState<number>(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const reactions: Reaction[] = useMemo(() => character?.reactions ?? [], [character]);
+  const currentReaction = reactions[currentReactionIdx];
+  const displayAvatar = currentReaction?.imageUrl ?? character?.avatar ?? "";
+
   useEffect(() => {
-    if (character) {
-      setMessages([{ role: "assistant", content: character.greeting }]);
+    if (character && messages.length === 0) {
+      setMessages([{ role: "assistant", content: character.greeting, reactionIdx: 0 }]);
       setIsSpeaking(true);
       const t = setTimeout(() => setIsSpeaking(false), 2400);
       return () => clearTimeout(t);
     }
-  }, [character]);
+  }, [character, messages.length]);
 
   useEffect(() => {
     if (mode === "text") inputRef.current?.focus();
@@ -38,6 +44,14 @@ function Chat() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-gold" />
+      </div>
+    );
+  }
 
   if (!character) {
     return (
@@ -53,13 +67,21 @@ function Chat() {
     setMessages((m) => [...m, { role: "user", content: trimmed }]);
     setInput("");
 
+    // Pick a reaction (random for now; will be set by LLM later)
+    const nextIdx = reactions.length > 0 ? Math.floor(Math.random() * reactions.length) : 0;
+    setCurrentReactionIdx(nextIdx);
+
     // TODO: branche ici l'appel API (Sonnet via Vercel)
-    // const res = await fetch("/api/chat", { method: "POST", body: JSON.stringify({ characterId: id, messages: [...messages, { role: "user", content: trimmed }] }) });
     setIsSpeaking(true);
     setTimeout(() => {
+      const reactionLabel = reactions[nextIdx]?.label ?? "";
       setMessages((m) => [
         ...m,
-        { role: "assistant", content: `(${character.name} réfléchit…) — Connectez votre clé API Sonnet pour activer la réponse complète.` },
+        {
+          role: "assistant",
+          content: `(${character.name}${reactionLabel ? ` — ${reactionLabel}` : ""}) Connectez l'API LLM pour activer la réponse complète.`,
+          reactionIdx: nextIdx,
+        },
       ]);
       setIsSpeaking(false);
     }, 1400);
@@ -69,16 +91,31 @@ function Chat() {
 
   return (
     <div className="vignette relative flex min-h-screen flex-col overflow-hidden bg-background">
-      {/* Avatar background */}
+      {/* Avatar background (reaction-aware) */}
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 transition-all duration-700"
         style={{
-          backgroundImage: `url(${character.avatar})`,
+          backgroundImage: `url(${displayAvatar})`,
           backgroundSize: "cover",
           backgroundPosition: "center top",
         }}
       />
       <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/60 to-background" />
+
+      {/* Centered animated reaction portrait (only for custom characters with reactions) */}
+      {currentReaction && (
+        <div className="pointer-events-none absolute left-1/2 top-24 z-10 -translate-x-1/2">
+          <img
+            key={currentReactionIdx}
+            src={currentReaction.imageUrl}
+            alt={currentReaction.label}
+            className={`h-48 w-48 rounded-full object-cover shadow-cinema ring-2 ring-gold/40 reaction-${currentReaction.animation}`}
+          />
+          <p className="mt-3 text-center text-xs uppercase tracking-[0.3em] text-gold/80">
+            {currentReaction.emoji} {currentReaction.label}
+          </p>
+        </div>
+      )}
 
       {/* Header */}
       <header className="relative z-10 flex items-center justify-between px-5 pt-6">

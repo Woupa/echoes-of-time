@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { Phone, PhoneOff, ArrowLeft } from "lucide-react";
-import { getCharacter } from "@/lib/characters";
+import { Phone, PhoneOff, ArrowLeft, Loader2 } from "lucide-react";
+import { useCharacter } from "@/lib/use-characters";
 
 export const Route = createFileRoute("/call/$id")({
   component: IncomingCall,
@@ -9,7 +9,15 @@ export const Route = createFileRoute("/call/$id")({
 function IncomingCall() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
-  const character = getCharacter(id);
+  const { character, isLoading } = useCharacter(id);
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-gold" />
+      </div>
+    );
+  }
 
   if (!character) {
     return (
@@ -21,7 +29,6 @@ function IncomingCall() {
 
   return (
     <div className="vignette relative flex min-h-screen flex-col items-center justify-between overflow-hidden bg-background px-6 py-12">
-      {/* Backdrop blur of avatar */}
       <div
         className="absolute inset-0 opacity-40"
         style={{
@@ -33,9 +40,17 @@ function IncomingCall() {
       />
       <div className="absolute inset-0 bg-background/70" />
 
-      <div className="relative animate-fade-up text-center">
-        <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">Appel entrant</p>
-        <p className="mt-2 font-display text-2xl text-foreground/90">Pionnier · Ligne historique</p>
+      <div className="relative flex w-full items-center justify-between">
+        <button
+          onClick={() => navigate({ to: "/select" })}
+          className="flex items-center gap-2 rounded-full border border-border bg-card/40 px-3 py-1.5 text-xs uppercase tracking-widest text-muted-foreground backdrop-blur hover:text-foreground"
+        >
+          <ArrowLeft className="h-3 w-3" /> Contacts
+        </button>
+        <div className="animate-fade-up text-right">
+          <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">Appel entrant</p>
+          <p className="mt-1 font-display text-sm text-foreground/90">Pionnier · Ligne historique</p>
+        </div>
       </div>
 
       <div className="relative flex flex-col items-center">
