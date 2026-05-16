@@ -171,13 +171,49 @@ function splitIntoEmotionSegments(text: string): { tag: string | null; text: str
   return segments;
 }
 
-// Map emotion tag → Gradium speed hint (1.0 = normal). Best-effort: if Gradium
-// ignores the param, we still benefit from the natural pause between calls.
+// Canonical short emotion vocabulary mapped to Gradium-native controls.
+// Gradium TTS does NOT expose emotion presets — only `speed`, `<flush>` and
+// `<break time="..." />`. We model emotion as (speed bucket, pre-pause in s).
+// Keep this vocabulary SHORT and DISTINCT so the LLM picks crisp transitions
+// and audio stays natural and fast.
+type EmotionSpec = { speed: number; pause: number; canonical: string };
+const EMOTION_MAP: Record<string, EmotionSpec> = {
+  // Slow, low-energy
+  grave:    { speed: 0.92, pause: 0.45, canonical: "grave" },
+  whisper:  { speed: 0.92, pause: 0.35, canonical: "whisper" },
+  soft:     { speed: 0.95, pause: 0.30, canonical: "soft" },
+  sad:      { speed: 0.92, pause: 0.40, canonical: "sad" },
+  pause:    { speed: 1.00, pause: 0.55, canonical: "pause" },
+  // Neutral
+  calm:     { speed: 1.00, pause: 0.20, canonical: "calm" },
+  // Fast, high-energy
+  joy:      { speed: 1.07, pause: 0.15, canonical: "joy" },
+  laugh:    { speed: 1.10, pause: 0.20, canonical: "laugh" },
+  excited:  { speed: 1.08, pause: 0.15, canonical: "excited" },
+  fierce:   { speed: 1.05, pause: 0.20, canonical: "fierce" },
+  surprise: { speed: 1.08, pause: 0.20, canonical: "surprise" },
+};
+
+// Resolve any free-form tag the LLM might emit (FR/EN aliases) to a canonical emotion.
+function resolveEmotion(tag: string | null): EmotionSpec {
+  if (!tag) return EMOTION_MAP.calm;
+  const t = tag.toLowerCase().trim();
+  if (EMOTION_MAP[t]) return EMOTION_MAP[t];
+  if (/grave|solem|profond|sober/.test(t)) return EMOTION_MAP.grave;
+  if (/whisper|chuchot|murmur/.test(t)) return EMOTION_MAP.whisper;
+  if (/soft|doux|tendre|gentle|ému|emu/.test(t)) return EMOTION_MAP.soft;
+  if (/sad|triste|mélanc|melanc/.test(t)) return EMOTION_MAP.sad;
+  if (/pause|silence|beat/.test(t)) return EMOTION_MAP.pause;
+  if (/laugh|rire|hihi|hehe/.test(t)) return EMOTION_MAP.laugh;
+  if (/joy|joyeux|happy|content/.test(t)) return EMOTION_MAP.joy;
+  if (/excit|énerg|energ|enthous|eager/.test(t)) return EMOTION_MAP.excited;
+  if (/fier|fierce|proud|assert|martial/.test(t)) return EMOTION_MAP.fierce;
+  if (/surpr|étonn|etonn|wow/.test(t)) return EMOTION_MAP.surprise;
+  return EMOTION_MAP.calm;
+}
+
 function speedForTag(tag: string | null): number {
-  if (!tag) return 1.0;
-  if (/grave|pause|ému|emu|chuchot|whisper|triste/.test(tag)) return 0.92;
-  if (/rire|laugh|joyeux|fier|excit|énerg|energ/.test(tag)) return 1.06;
-  return 1.0;
+  return resolveEmotion(tag).speed;
 }
 
 // Concatenate multiple PCM WAV buffers into one. Assumes same sample rate / channels.
