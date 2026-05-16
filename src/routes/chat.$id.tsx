@@ -8,6 +8,7 @@ import type { Reaction } from "@/lib/characters";
 
 import { useAuth } from "@/lib/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { LangToggle, useT } from "@/lib/i18n";
 
 const INACTIVITY_MS = 60_000;
 
