@@ -1,7 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Plus, Search, Phone, Sparkles } from "lucide-react";
+import { Plus, Search, Phone, Sparkles, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAllCharacters } from "@/lib/use-characters";
+import { deleteCustomCharacter } from "@/lib/character-generation.functions";
 
 export const Route = createFileRoute("/select")({
   component: Select,
@@ -10,9 +13,26 @@ export const Route = createFileRoute("/select")({
 function Select() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const { all, isLoading } = useAllCharacters();
+  const removeFn = useServerFn(deleteCustomCharacter);
+  const qc = useQueryClient();
 
   const filtered = all.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()));
+
+  const confirmDelete = async (id: string) => {
+    setDeletingId(id);
+    try {
+      await removeFn({ data: { id } });
+      await qc.invalidateQueries({ queryKey: ["custom-characters"] });
+    } catch (err) {
+      console.error("Delete failed:", err);
+    } finally {
+      setDeletingId(null);
+      setPendingDelete(null);
+    }
+  };
 
   return (
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 pb-12 pt-10">
@@ -35,12 +55,12 @@ function Select() {
         {filtered.map((c, i) => (
           <li
             key={c.id}
-            className="animate-fade-up"
+            className="animate-fade-up group/row relative"
             style={{ animationDelay: `${0.15 + i * 0.06}s` }}
           >
             <button
               onClick={() => navigate({ to: "/call/$id", params: { id: c.id } })}
-              className="group flex w-full items-center gap-4 px-4 py-4 text-left transition-colors hover:bg-accent/40"
+              className="group flex w-full items-center gap-4 px-4 py-4 pr-16 text-left transition-colors hover:bg-accent/40"
             >
               <div className="relative">
                 <div
@@ -69,6 +89,36 @@ function Select() {
                 <Phone className="h-4 w-4" />
               </span>
             </button>
+
+            {c.isCustom && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                {pendingDelete === c.id ? (
+                  <div className="flex items-center gap-1 rounded-full bg-card px-2 py-1 shadow-cinema ring-1 ring-destructive/50">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); confirmDelete(c.id); }}
+                      disabled={deletingId === c.id}
+                      className="rounded-full bg-destructive px-2 py-1 text-[10px] uppercase tracking-wider text-destructive-foreground disabled:opacity-50"
+                    >
+                      {deletingId === c.id ? "…" : "Confirmer"}
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setPendingDelete(null); }}
+                      className="rounded-full px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setPendingDelete(c.id); }}
+                    aria-label={`Supprimer ${c.name}`}
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-all hover:bg-destructive/15 hover:text-destructive group-hover/row:opacity-100"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            )}
           </li>
         ))}
 
