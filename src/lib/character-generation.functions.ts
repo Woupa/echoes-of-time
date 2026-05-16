@@ -459,7 +459,9 @@ export const chatWithCharacter = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => ChatInput.parse(input))
   .handler(async ({ data }) => {
     const apiKey = process.env.PIONEER_API_KEY;
-    if (!apiKey) throw new Error("Clé Pioneer manquante côté serveur.");
+    if (!apiKey && !process.env.ChatGPT) {
+      throw new Error("Aucun LLM configuré côté serveur (PIONEER_API_KEY ni ChatGPT).");
+    }
 
     let char = BUILT_IN_CHAT_CHARACTERS[data.characterId];
     if (!char && UUID_RE.test(data.characterId)) {
