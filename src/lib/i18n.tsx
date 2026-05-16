@@ -45,6 +45,7 @@ const DICT: Dict = {
   conversation: { fr: "Conversation", en: "Conversation" },
   with: { fr: "avec", en: "with" },
   loading: { fr: "Chargement…", en: "Loading…" },
+  export_txt: { fr: "Exporter en .txt", en: "Export as .txt" },
 
   // Select
   contacts_subtitle: { fr: "Contacts historiques", en: "Historical contacts" },

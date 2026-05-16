@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { Mic, MicOff, Keyboard, History, Film, Bookmark, PhoneOff, Send, X, Loader2, Home, Volume2, VolumeX, Share2, Check } from "lucide-react";
+import { Mic, MicOff, Keyboard, History, Film, Bookmark, PhoneOff, Send, X, Loader2, Home, Volume2, VolumeX, Share2, Check, Download } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useCharacter } from "@/lib/use-characters";
@@ -485,6 +485,25 @@ function Chat() {
 
   const last = messages[messages.length - 1];
 
+  const handleExportTxt = () => {
+    const charName = character?.name ?? "personnage";
+    const date = new Date();
+    const header = `Conversation avec ${charName}\n${date.toLocaleString()}\n${"=".repeat(40)}\n\n`;
+    const body = messages
+      .map((m) => `${m.role === "user" ? t("you") : charName}:\n${m.content}\n`)
+      .join("\n");
+    const blob = new Blob([header + body], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const safe = charName.toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
+    a.href = url;
+    a.download = `conversation-${safe}-${date.toISOString().slice(0, 10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="vignette relative flex min-h-screen flex-col overflow-hidden bg-background">
       <audio ref={audioRef} hidden onPlay={() => setIsSpeaking(true)} onEnded={() => setIsSpeaking(false)} onPause={() => setIsSpeaking(false)} />
@@ -717,6 +736,16 @@ function Chat() {
               </div>
               <button onClick={() => setShowHistory(false)} className="rounded-full p-2 hover:bg-accent">
                 <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="border-b border-border px-5 py-3">
+              <button
+                onClick={handleExportTxt}
+                disabled={messages.length === 0}
+                className="flex items-center gap-2 rounded-full border border-gold/40 bg-card/60 px-3 py-1.5 text-xs text-gold hover:bg-accent disabled:opacity-50"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {t("export_txt")}
               </button>
             </div>
             <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
