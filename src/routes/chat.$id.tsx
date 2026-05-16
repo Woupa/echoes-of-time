@@ -19,6 +19,20 @@ export const Route = createFileRoute("/chat/$id")({
 type Message = { role: "user" | "assistant"; content: string; saved?: boolean; reactionIdx?: number };
 
 const RECORDING_SAMPLE_RATE = 24_000;
+const SILENCE_RMS_THRESHOLD = 0.012;
+const SILENCE_TIMEOUT_MS = 3_000;
+
+function detectLang(text: string): "fr" | "en" | null {
+  const t = text.toLowerCase();
+  if (/[àâçéèêëîïôûùüÿñœæ]/.test(t)) return "fr";
+  const frRe = /\b(le|la|les|un|une|des|je|tu|nous|vous|est|c'est|pour|avec|mais|pas|oui|non|bonjour|salut|merci|qui|que|quoi|comment|pourquoi|où|dans|sur|sous|très|bien|aussi|alors|donc|ça|cette|ce|mon|ma|mes|ton|ta|tes|son|sa|ses|nos|vos|leur|leurs|moi|toi|lui|elle|ils|elles)\b/g;
+  const enRe = /\b(the|a|an|i|you|we|they|is|are|was|were|for|with|but|not|yes|no|hello|hi|hey|thanks|thank|who|what|how|why|where|when|in|on|under|about|do|does|did|have|has|can|could|would|should|my|your|his|her|our|their|me|him|us|them)\b/g;
+  const fr = (t.match(frRe) || []).length;
+  const en = (t.match(enRe) || []).length;
+  if (fr > en) return "fr";
+  if (en > fr) return "en";
+  return null;
+}
 
 function encodeWav(samples: Float32Array, sampleRate: number) {
   const buffer = new ArrayBuffer(44 + samples.length * 2);
@@ -133,6 +147,8 @@ function Chat() {
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const recordedSamplesRef = useRef<Float32Array[]>([]);
+  const lastVoiceAtRef = useRef<number>(0);
+  const silenceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Redirect to /auth when not authenticated so conversations can be saved
   useEffect(() => {
@@ -262,7 +278,7 @@ function Chat() {
       if (isCustom || ["napoleon", "einstein", "mjackson"].includes(id)) {
         const history = nextMessages.map((m) => ({ role: m.role, content: m.content }));
         const { reply, reactionIdx, audio, mime } = await chat({
-          data: { characterId: id, messages: history, withAudio: !muted, lang },
+          data: { characterId: id, messages: history, withAudio: !muted, lang: detectLang(trimmed) ?? lang },
         });
         setIsThinking(false);
         const safeReactionIdx = reactions.length > 0 ? reactionIdx : 0;
@@ -304,6 +320,10 @@ function Chat() {
   };
 
   const stopPcmRecording = useCallback(async () => {
+    if (silenceTimerRef.current) {
+      clearInterval(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
     const stream = mediaStreamRef.current;
     const context = audioContextRef.current;
     const sampleRate = context?.sampleRate ?? RECORDING_SAMPLE_RATE;
@@ -384,10 +404,17 @@ function Chat() {
 
   const startRecording = useCallback(async () => {
     setMicError(null);
+    // Pressing Speak interrupts the assistant
+    if (audioRef.current) {
+      audioRef.current.pause();
+      try { audioRef.current.currentTime = 0; } catch { /* ignore */ }
+    }
+    setIsSpeaking(false);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
       recordedSamplesRef.current = [];
+      lastVoiceAtRef.current = Date.now();
 
       const AudioContextClass = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioContextClass) throw new Error("Enregistrement audio non supporté par ce navigateur");
@@ -395,7 +422,13 @@ function Chat() {
       const source = context.createMediaStreamSource(stream);
       const processor = context.createScriptProcessor(4096, 1, 1);
       processor.onaudioprocess = (event) => {
-        recordedSamplesRef.current.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+        const data = event.inputBuffer.getChannelData(0);
+        recordedSamplesRef.current.push(new Float32Array(data));
+        // Compute RMS to detect voice activity
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+        const rms = Math.sqrt(sum / data.length);
+        if (rms > SILENCE_RMS_THRESHOLD) lastVoiceAtRef.current = Date.now();
       };
       source.connect(processor);
       processor.connect(context.destination);
@@ -403,11 +436,22 @@ function Chat() {
       sourceRef.current = source;
       processorRef.current = processor;
       setIsRecording(true);
+
+      // Auto-stop after 3s of silence (only counts after first voice or grace period)
+      const startedAt = Date.now();
+      silenceTimerRef.current = setInterval(() => {
+        const now = Date.now();
+        // Grace: don't stop in the first second
+        if (now - startedAt < 1000) return;
+        if (now - lastVoiceAtRef.current > SILENCE_TIMEOUT_MS) {
+          void stopPcmRecording();
+        }
+      }, 250);
     } catch (err) {
       setMicError(err instanceof Error ? err.message : "Accès micro refusé");
       setIsRecording(false);
     }
-  }, []);
+  }, [stopPcmRecording]);
 
   useEffect(() => {
     return () => {
