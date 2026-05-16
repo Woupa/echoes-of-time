@@ -18,7 +18,7 @@ export function useAllCharacters() {
   const q = useQuery({
     queryKey: ["custom-characters"],
     queryFn: async () => {
-      const rows = (await list({ data: {} })) as CharacterRow[];
+      const rows = (await list({ data: {} })) as unknown as CharacterRow[];
       return rows.map(rowToCharacter);
     },
     staleTime: 30_000,
@@ -37,7 +37,7 @@ export function useCharacter(id: string) {
   const q = useQuery({
     queryKey: ["character", id],
     queryFn: async () => {
-      const row = (await fetchOne({ data: { id } })) as CharacterRow;
+      const row = (await fetchOne({ data: { id } })) as unknown as CharacterRow;
       return rowToCharacter(row);
     },
     enabled: custom,
