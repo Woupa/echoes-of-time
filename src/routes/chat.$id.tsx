@@ -133,6 +133,7 @@ function Chat() {
 
   return (
     <div className="vignette relative flex min-h-screen flex-col overflow-hidden bg-background">
+      <audio ref={audioRef} hidden onPlay={() => setIsSpeaking(true)} onEnded={() => setIsSpeaking(false)} onPause={() => setIsSpeaking(false)} />
       {/* Avatar background (reaction-aware) */}
       <div
         className="absolute inset-0 transition-all duration-700"
