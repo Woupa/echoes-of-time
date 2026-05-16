@@ -42,13 +42,29 @@ function Chat() {
     return () => clearInterval(t);
   }, [isSpeaking, isThinking]);
 
-  const avatarState: AvatarState = isThinking
-    ? "thinking"
-    : isSpeaking
-      ? "talking"
-      : mode === "voice" && input.length === 0
-        ? "listening"
-        : "idle";
+  const [pulseState, setPulseState] = useState<AvatarState | null>(null);
+  useEffect(() => {
+    if (reactingTick === 0) return;
+    setPulseState("reacting");
+    const t = setTimeout(() => setPulseState(null), 700);
+    return () => clearTimeout(t);
+  }, [reactingTick]);
+  useEffect(() => {
+    if (specialTick === 0) return;
+    setPulseState("special");
+    const t = setTimeout(() => setPulseState(null), 1300);
+    return () => clearTimeout(t);
+  }, [specialTick]);
+
+  const avatarState: AvatarState = pulseState
+    ? pulseState
+    : isThinking
+      ? "thinking"
+      : isSpeaking
+        ? "talking"
+        : mode === "voice" && input.length === 0
+          ? "listening"
+          : "idle";
 
   useEffect(() => {
     if (character && messages.length === 0) {
