@@ -145,24 +145,8 @@ function Chat() {
     }
   }, [authLoading, user, navigate]);
 
-  if (isLoading || authLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-gold" />
-      </div>
-    );
-  }
-
-  if (!character) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Link to="/select" className="text-gold underline">Retour</Link>
-      </div>
-    );
-  }
-
   const playReply = async (text: string) => {
-    if (!isCustom || !text.trim() || muted) return;
+    if (!text.trim() || muted) return;
     try {
       const { audio, mime } = await speak({ data: { characterId: id, text } });
       const url = `data:${mime};base64,${audio}`;
