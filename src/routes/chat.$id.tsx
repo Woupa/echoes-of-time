@@ -91,16 +91,31 @@ function Chat() {
 
   return (
     <div className="vignette relative flex min-h-screen flex-col overflow-hidden bg-background">
-      {/* Avatar background */}
+      {/* Avatar background (reaction-aware) */}
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 transition-all duration-700"
         style={{
-          backgroundImage: `url(${character.avatar})`,
+          backgroundImage: `url(${displayAvatar})`,
           backgroundSize: "cover",
           backgroundPosition: "center top",
         }}
       />
       <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/60 to-background" />
+
+      {/* Centered animated reaction portrait (only for custom characters with reactions) */}
+      {currentReaction && (
+        <div className="pointer-events-none absolute left-1/2 top-24 z-10 -translate-x-1/2">
+          <img
+            key={currentReactionIdx}
+            src={currentReaction.imageUrl}
+            alt={currentReaction.label}
+            className={`h-48 w-48 rounded-full object-cover shadow-cinema ring-2 ring-gold/40 reaction-${currentReaction.animation}`}
+          />
+          <p className="mt-3 text-center text-xs uppercase tracking-[0.3em] text-gold/80">
+            {currentReaction.emoji} {currentReaction.label}
+          </p>
+        </div>
+      )}
 
       {/* Header */}
       <header className="relative z-10 flex items-center justify-between px-5 pt-6">
