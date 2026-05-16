@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useCharacter } from "@/lib/use-characters";
 import { chatWithCharacter, synthesizeSpeech, transcribeAudio } from "@/lib/character-generation.functions";
 import type { Reaction } from "@/lib/characters";
-import { AvatarSvg, type AvatarState } from "@/components/AvatarSvg";
+
 import { useAuth } from "@/lib/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -68,29 +68,6 @@ function Chat() {
     return () => clearInterval(t);
   }, [isSpeaking, isThinking]);
 
-  const [pulseState, setPulseState] = useState<AvatarState | null>(null);
-  useEffect(() => {
-    if (reactingTick === 0) return;
-    setPulseState("reacting");
-    const t = setTimeout(() => setPulseState(null), 700);
-    return () => clearTimeout(t);
-  }, [reactingTick]);
-  useEffect(() => {
-    if (specialTick === 0) return;
-    setPulseState("special");
-    const t = setTimeout(() => setPulseState(null), 1300);
-    return () => clearTimeout(t);
-  }, [specialTick]);
-
-  const avatarState: AvatarState = pulseState
-    ? pulseState
-    : isThinking || isTranscribing
-      ? "thinking"
-      : isSpeaking
-        ? "talking"
-        : isRecording || (mode === "voice" && input.length === 0)
-          ? "listening"
-          : "idle";
 
   useEffect(() => {
     if (character && messages.length === 0) {
@@ -319,31 +296,20 @@ function Chat() {
       />
       <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/60 to-background" />
 
-      {/* Centered animated avatar (SVG si dispo, sinon portrait de réaction) */}
-      {character.svgAvatar ? (
-        <div className="pointer-events-none absolute left-1/2 top-20 z-10 -translate-x-1/2">
-          <div className="h-56 w-56 overflow-hidden rounded-full shadow-cinema ring-2 ring-gold/40">
-            <AvatarSvg svg={character.svgAvatar} state={avatarState} />
-          </div>
-          {currentReaction && (
-            <p className="mt-3 text-center text-xs uppercase tracking-[0.3em] text-gold/80">
-              {currentReaction.emoji} {currentReaction.label}
-            </p>
-          )}
-        </div>
-      ) : currentReaction ? (
+      {/* Portrait de réaction centré */}
+      {currentReaction && (
         <div className="pointer-events-none absolute left-1/2 top-24 z-10 -translate-x-1/2">
           <img
             key={currentReactionIdx}
             src={currentReaction.imageUrl}
             alt={currentReaction.label}
-            className={`h-48 w-48 rounded-full object-cover shadow-cinema ring-2 ring-gold/40 reaction-${currentReaction.animation}`}
+            className="h-48 w-48 rounded-full object-cover shadow-cinema ring-2 ring-gold/40"
           />
           <p className="mt-3 text-center text-xs uppercase tracking-[0.3em] text-gold/80">
             {currentReaction.emoji} {currentReaction.label}
           </p>
         </div>
-      ) : null}
+      )}
 
       {/* Header */}
       <header className="relative z-10 flex items-center justify-between px-5 pt-6">
