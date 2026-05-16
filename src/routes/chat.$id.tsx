@@ -278,7 +278,7 @@ function Chat() {
       if (isCustom || ["napoleon", "einstein", "mjackson"].includes(id)) {
         const history = nextMessages.map((m) => ({ role: m.role, content: m.content }));
         const { reply, reactionIdx, audio, mime } = await chat({
-          data: { characterId: id, messages: history, withAudio: !muted, lang },
+          data: { characterId: id, messages: history, withAudio: !muted, lang: detectLang(trimmed) ?? lang },
         });
         setIsThinking(false);
         const safeReactionIdx = reactions.length > 0 ? reactionIdx : 0;
