@@ -1,11 +1,15 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { Mic, MicOff, Keyboard, History, Film, Bookmark, PhoneOff, Send, X, Loader2 } from "lucide-react";
+import { Mic, MicOff, Keyboard, History, Film, Bookmark, PhoneOff, Send, X, Loader2, Home } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useCharacter } from "@/lib/use-characters";
 import { chatWithCharacter, synthesizeSpeech, transcribeAudio } from "@/lib/character-generation.functions";
 import type { Reaction } from "@/lib/characters";
 import { AvatarSvg, type AvatarState } from "@/components/AvatarSvg";
+import { useAuth } from "@/lib/use-auth";
+import { supabase } from "@/integrations/supabase/client";
+
+const INACTIVITY_MS = 60_000;
 
 export const Route = createFileRoute("/chat/$id")({
   component: Chat,
@@ -32,6 +36,25 @@ function Chat() {
   const [micError, setMicError] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
+  const conversationIdRef = useRef<string | null>(null);
+
+  // Inactivity → retour à l'accueil après 60s
+  const lastActivityRef = useRef(Date.now());
+  const bump = useCallback(() => { lastActivityRef.current = Date.now(); }, []);
+  useEffect(() => {
+    const iv = setInterval(() => {
+      if (Date.now() - lastActivityRef.current > INACTIVITY_MS) {
+        navigate({ to: "/" });
+      }
+    }, 5000);
+    const evts: (keyof WindowEventMap)[] = ["pointerdown", "keydown", "touchstart"];
+    evts.forEach((e) => window.addEventListener(e, bump));
+    return () => {
+      clearInterval(iv);
+      evts.forEach((e) => window.removeEventListener(e, bump));
+    };
+  }, [bump, navigate]);
 
   const reactions: Reaction[] = useMemo(() => character?.reactions ?? [], [character]);
   const currentReaction = reactions[currentReactionIdx];
@@ -126,10 +149,38 @@ function Chat() {
     }
   };
 
+  const persistMessages = async (newOnes: Message[]) => {
+    if (!user || newOnes.length === 0) return;
+    try {
+      if (!conversationIdRef.current) {
+        const { data, error } = await supabase
+          .from("conversations")
+          .insert({ user_id: user.id, character_id: id, title: character?.name ?? "" })
+          .select("id")
+          .single();
+        if (error || !data) return;
+        conversationIdRef.current = data.id;
+      }
+      const cid = conversationIdRef.current;
+      await supabase.from("messages").insert(
+        newOnes.map((m) => ({
+          conversation_id: cid,
+          user_id: user.id,
+          role: m.role,
+          content: m.content,
+        })),
+      );
+    } catch (err) {
+      console.error("save conversation:", err);
+    }
+  };
+
   const send = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    const nextMessages: Message[] = [...messages, { role: "user", content: trimmed }];
+    bump();
+    const userMsg: Message = { role: "user", content: trimmed };
+    const nextMessages: Message[] = [...messages, userMsg];
     setMessages(nextMessages);
     setInput("");
     setIsThinking(true);
@@ -143,24 +194,22 @@ function Chat() {
         setIsThinking(false);
         setCurrentReactionIdx(reactionIdx);
         if (/[!?]/.test(reply)) setReactingTick((n) => n + 1);
-        setMessages((m) => [
-          ...m,
-          { role: "assistant", content: reply, reactionIdx },
-        ]);
+        const aMsg: Message = { role: "assistant", content: reply, reactionIdx };
+        setMessages((m) => [...m, aMsg]);
+        void persistMessages([userMsg, aMsg]);
         void playReply(reply);
       } else {
         const nextIdx = reactions.length > 0 ? Math.floor(Math.random() * reactions.length) : 0;
         setCurrentReactionIdx(nextIdx);
         const reactionLabel = reactions[nextIdx]?.label ?? "";
         setIsThinking(false);
-        setMessages((m) => [
-          ...m,
-          {
-            role: "assistant",
-            content: `(${character.name}${reactionLabel ? ` — ${reactionLabel}` : ""}) Connectez l'API LLM pour activer la réponse complète.`,
-            reactionIdx: nextIdx,
-          },
-        ]);
+        const aMsg: Message = {
+          role: "assistant",
+          content: `(${character.name}${reactionLabel ? ` — ${reactionLabel}` : ""}) Connectez l'API LLM pour activer la réponse complète.`,
+          reactionIdx: nextIdx,
+        };
+        setMessages((m) => [...m, aMsg]);
+        void persistMessages([userMsg, aMsg]);
       }
     } catch (err) {
       setIsThinking(false);
@@ -312,12 +361,21 @@ function Chat() {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => setShowHistory(true)}
-          className="rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs backdrop-blur"
-        >
-          Historique
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/"
+            className="flex items-center gap-1.5 rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs backdrop-blur hover:bg-accent"
+            aria-label="Retour à l'accueil"
+          >
+            <Home className="h-3.5 w-3.5" /> Accueil
+          </Link>
+          <button
+            onClick={() => setShowHistory(true)}
+            className="rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs backdrop-blur"
+          >
+            Historique
+          </button>
+        </div>
       </header>
 
       {/* Live subtitle of assistant */}

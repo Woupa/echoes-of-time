@@ -1,10 +1,12 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Plus, Search, Phone, Sparkles, Trash2 } from "lucide-react";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { Plus, Search, Phone, Sparkles, Trash2, LogIn, LogOut, User } from "lucide-react";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAllCharacters } from "@/lib/use-characters";
 import { deleteCustomCharacter } from "@/lib/character-generation.functions";
+import { useAuth } from "@/lib/use-auth";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/select")({
   component: Select,
@@ -18,6 +20,7 @@ function Select() {
   const { all, isLoading } = useAllCharacters();
   const removeFn = useServerFn(deleteCustomCharacter);
   const qc = useQueryClient();
+  const { user } = useAuth();
 
   const filtered = all.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()));
 
@@ -36,9 +39,27 @@ function Select() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 pb-12 pt-10">
-      <header className="animate-fade-up">
-        <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Contacts historiques</p>
-        <h1 className="mt-2 font-display text-4xl text-foreground">Qui voulez-vous appeler ?</h1>
+      <header className="animate-fade-up flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Contacts historiques</p>
+          <h1 className="mt-2 font-display text-4xl text-foreground">Qui voulez-vous appeler ?</h1>
+        </div>
+        {user ? (
+          <button
+            onClick={async () => { await supabase.auth.signOut(); }}
+            className="flex items-center gap-1.5 rounded-full border border-border bg-card/60 px-3 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground hover:text-gold"
+            title={user.email ?? ""}
+          >
+            <User className="h-3 w-3" /> <LogOut className="h-3 w-3" />
+          </button>
+        ) : (
+          <Link
+            to="/auth"
+            className="flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-3 py-1.5 text-[10px] uppercase tracking-widest text-gold hover:bg-gold/20"
+          >
+            <LogIn className="h-3 w-3" /> Compte
+          </Link>
+        )}
       </header>
 
       <div className="animate-fade-up mt-6 flex items-center gap-3 rounded-2xl border border-border bg-card/50 px-4 py-3 backdrop-blur" style={{ animationDelay: "0.1s" }}>
