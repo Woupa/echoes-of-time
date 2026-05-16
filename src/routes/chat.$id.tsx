@@ -194,24 +194,22 @@ function Chat() {
         setIsThinking(false);
         setCurrentReactionIdx(reactionIdx);
         if (/[!?]/.test(reply)) setReactingTick((n) => n + 1);
-        setMessages((m) => [
-          ...m,
-          { role: "assistant", content: reply, reactionIdx },
-        ]);
+        const aMsg: Message = { role: "assistant", content: reply, reactionIdx };
+        setMessages((m) => [...m, aMsg]);
+        void persistMessages([userMsg, aMsg]);
         void playReply(reply);
       } else {
         const nextIdx = reactions.length > 0 ? Math.floor(Math.random() * reactions.length) : 0;
         setCurrentReactionIdx(nextIdx);
         const reactionLabel = reactions[nextIdx]?.label ?? "";
         setIsThinking(false);
-        setMessages((m) => [
-          ...m,
-          {
-            role: "assistant",
-            content: `(${character.name}${reactionLabel ? ` — ${reactionLabel}` : ""}) Connectez l'API LLM pour activer la réponse complète.`,
-            reactionIdx: nextIdx,
-          },
-        ]);
+        const aMsg: Message = {
+          role: "assistant",
+          content: `(${character.name}${reactionLabel ? ` — ${reactionLabel}` : ""}) Connectez l'API LLM pour activer la réponse complète.`,
+          reactionIdx: nextIdx,
+        };
+        setMessages((m) => [...m, aMsg]);
+        void persistMessages([userMsg, aMsg]);
       }
     } catch (err) {
       setIsThinking(false);
