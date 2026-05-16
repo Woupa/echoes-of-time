@@ -607,7 +607,7 @@ export const getCustomCharacter = createServerFn({ method: "GET" })
   });
 
 const SpeakInput = z.object({
-  characterId: z.string().uuid(),
+  characterId: z.string().min(1).max(128),
   text: z.string().min(1).max(2000),
 });
 
@@ -617,14 +617,24 @@ export const synthesizeSpeech = createServerFn({ method: "POST" })
     const apiKey = process.env.Gradium;
     if (!apiKey) throw new Error("Clé Gradium manquante côté serveur.");
 
-    const { data: char, error } = await supabaseAdmin
-      .from("characters")
-      .select("voice_id")
-      .eq("id", data.characterId)
-      .single();
-    if (error || !char) throw new Error(`Personnage introuvable : ${error?.message}`);
-    const stored = (char.voice_id as string | null) ?? DEFAULT_GRADIUM_VOICE;
-    const voiceId = GRADIUM_FR_VOICES.some((v) => v.id === stored) ? stored : DEFAULT_GRADIUM_VOICE;
+    // Built-in voice presets for non-UUID character ids
+    const BUILTIN_VOICES: Record<string, string> = {
+      napoleon: DEFAULT_GRADIUM_VOICE,
+      einstein: DEFAULT_GRADIUM_VOICE,
+      mjackson: DEFAULT_GRADIUM_VOICE,
+    };
+
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.characterId);
+    let voiceId = BUILTIN_VOICES[data.characterId] ?? DEFAULT_GRADIUM_VOICE;
+    if (isUuid) {
+      const { data: char } = await supabaseAdmin
+        .from("characters")
+        .select("voice_id")
+        .eq("id", data.characterId)
+        .single();
+      const stored = (char?.voice_id as string | null) ?? DEFAULT_GRADIUM_VOICE;
+      voiceId = GRADIUM_FR_VOICES.some((v) => v.id === stored) ? stored : DEFAULT_GRADIUM_VOICE;
+    }
 
     const res = await fetch("https://api.gradium.ai/api/post/speech/tts", {
       method: "POST",

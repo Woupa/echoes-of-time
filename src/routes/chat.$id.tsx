@@ -145,24 +145,8 @@ function Chat() {
     }
   }, [authLoading, user, navigate]);
 
-  if (isLoading || authLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-gold" />
-      </div>
-    );
-  }
-
-  if (!character) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Link to="/select" className="text-gold underline">Retour</Link>
-      </div>
-    );
-  }
-
   const playReply = async (text: string) => {
-    if (!isCustom || !text.trim() || muted) return;
+    if (!text.trim() || muted) return;
     try {
       const { audio, mime } = await speak({ data: { characterId: id, text } });
       const url = `data:${mime};base64,${audio}`;
@@ -288,7 +272,7 @@ function Chat() {
         setIsThinking(false);
         const aMsg: Message = {
           role: "assistant",
-          content: `(${character.name}${reactionLabel ? ` — ${reactionLabel}` : ""}) Connectez l'API LLM pour activer la réponse complète.`,
+          content: `(${character?.name ?? ""}${reactionLabel ? ` — ${reactionLabel}` : ""}) Connectez l'API LLM pour activer la réponse complète.`,
           reactionIdx: nextIdx,
         };
         setMessages((m) => [...m, aMsg]);
@@ -420,6 +404,22 @@ function Chat() {
       mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);
+
+  if (isLoading || authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-gold" />
+      </div>
+    );
+  }
+
+  if (!character) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Link to="/select" className="text-gold underline">Retour</Link>
+      </div>
+    );
+  }
 
   const toggleMic = () => {
     if (isRecording) stopRecording();
