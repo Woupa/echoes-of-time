@@ -212,11 +212,12 @@ function Chat() {
       mediaStreamRef.current = stream;
       recordedChunksRef.current = [];
 
+      // Gradium STT rejects codec parameters (e.g. "audio/webm;codecs=opus").
+      // Prefer container-only MIME types it accepts.
       const mimeCandidates = [
-        "audio/webm;codecs=opus",
-        "audio/webm",
         "audio/mp4",
-        "audio/ogg;codecs=opus",
+        "audio/webm",
+        "audio/ogg",
       ];
       const supported = mimeCandidates.find((m) =>
         typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported?.(m),
