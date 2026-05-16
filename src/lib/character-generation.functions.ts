@@ -439,6 +439,23 @@ Réponds STRICTEMENT en JSON (aucun markdown) au format :
     return { reply: String(parsed.reply ?? ""), reactionIdx: idx };
   });
 
+export const deleteCustomCharacter = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data }) => {
+    // Best-effort cleanup of sprite storage
+    const { data: files } = await supabaseAdmin.storage
+      .from("character-sprites")
+      .list(data.id);
+    if (files && files.length > 0) {
+      await supabaseAdmin.storage
+        .from("character-sprites")
+        .remove(files.map((f) => `${data.id}/${f.name}`));
+    }
+    const { error } = await supabaseAdmin.from("characters").delete().eq("id", data.id);
+    if (error) throw new Error(`DB delete : ${error.message}`);
+    return { ok: true };
+  });
+
 export const getCustomCharacter = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
