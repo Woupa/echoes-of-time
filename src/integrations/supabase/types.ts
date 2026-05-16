@@ -14,7 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      characters: {
+        Row: {
+          accent: string
+          base_avatar_url: string
+          created_at: string
+          era: string
+          greeting: string
+          id: string
+          name: string
+          reactions: Json
+          system_prompt: string
+          title: string
+          user_context: string
+        }
+        Insert: {
+          accent?: string
+          base_avatar_url: string
+          created_at?: string
+          era?: string
+          greeting: string
+          id?: string
+          name: string
+          reactions?: Json
+          system_prompt: string
+          title?: string
+          user_context?: string
+        }
+        Update: {
+          accent?: string
+          base_avatar_url?: string
+          created_at?: string
+          era?: string
+          greeting?: string
+          id?: string
+          name?: string
+          reactions?: Json
+          system_prompt?: string
+          title?: string
+          user_context?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
