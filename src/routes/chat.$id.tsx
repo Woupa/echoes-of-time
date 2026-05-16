@@ -83,6 +83,11 @@ function Chat() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
+  const chat = useServerFn(chatWithCharacter);
+  const speak = useServerFn(synthesizeSpeech);
+  const isCustom = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -98,11 +103,6 @@ function Chat() {
       </div>
     );
   }
-
-  const chat = useServerFn(chatWithCharacter);
-  const speak = useServerFn(synthesizeSpeech);
-  const isCustom = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const playReply = async (text: string) => {
     if (!isCustom || !text.trim()) return;
