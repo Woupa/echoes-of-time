@@ -627,37 +627,37 @@ function Chat() {
         <div className="mx-auto flex max-w-md items-center justify-around px-6">
           <ActionButton
             icon={mode === "voice" ? <Mic /> : <Keyboard />}
-            label={mode === "voice" ? "Vocal" : "Clavier"}
+            label={mode === "voice" ? t("voice_mode") : t("text_mode")}
             onClick={() => setMode(mode === "voice" ? "text" : "voice")}
             active
           />
           {mode === "voice" ? (
             <ActionButton
               icon={isRecording ? <MicOff /> : isTranscribing ? <Loader2 className="animate-spin" /> : <Mic />}
-              label={isRecording ? "Stop" : isTranscribing ? "Transcrit…" : "Parler"}
+              label={isRecording ? t("stop") : isTranscribing ? t("transcribing") : t("speak")}
               onClick={toggleMic}
               active={isRecording}
             />
           ) : (
-            <ActionButton icon={<Film />} label="Scène" onClick={() => send("Imagine une scène : que feriez-vous aujourd'hui ?")} />
+            <ActionButton icon={<Film />} label={t("scene")} onClick={() => send(t("scene_prompt"))} />
           )}
 
           <button
             onClick={() => navigate({ to: "/select" })}
             className="flex h-16 w-16 items-center justify-center rounded-full bg-hangup shadow-cinema transition-transform active:scale-95"
-            aria-label="Raccrocher"
+            aria-label={t("hangup")}
           >
             <PhoneOff className="h-6 w-6 text-white" />
           </button>
 
           <ActionButton
             icon={<Bookmark />}
-            label="Mémoriser"
+            label={t("save")}
             onClick={() => {
               setMessages((m) => m.map((msg, i) => i === m.length - 1 ? { ...msg, saved: true } : msg));
             }}
           />
-          <ActionButton icon={<History />} label="Fil" onClick={() => setShowHistory(true)} />
+          <ActionButton icon={<History />} label={t("thread")} onClick={() => setShowHistory(true)} />
         </div>
       </div>
 
