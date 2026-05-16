@@ -10,6 +10,10 @@ export type Reaction = {
   imageUrl: string;
 };
 
+type Lang = "fr" | "en";
+
+type LocalizedString = { fr: string; en: string };
+
 export type Character = {
   id: string;
   name: string;
@@ -24,43 +28,87 @@ export type Character = {
   isCustom?: boolean;
 };
 
-export const CHARACTERS: Character[] = [
+type CharacterI18n = {
+  id: string;
+  avatar: string;
+  accent: string;
+  name: LocalizedString;
+  era: LocalizedString;
+  title: LocalizedString;
+  greeting: LocalizedString;
+  systemPrompt: LocalizedString;
+};
+
+export const CHARACTERS_I18N: CharacterI18n[] = [
   {
     id: "napoleon",
-    name: "Napoléon Bonaparte",
-    era: "XIXᵉ siècle",
-    title: "Empereur des Français",
     avatar: napoleon,
     accent: "oklch(0.65 0.18 30)",
-    greeting: "Allons, parlez ! Le temps d'un Empereur est précieux.",
-    systemPrompt:
-      "Tu es Napoléon Bonaparte. Réponds avec assurance impériale, références aux campagnes militaires, au Code civil, à Joséphine. Ton martial, parfois sentencieux.",
+    name: { fr: "Napoléon Bonaparte", en: "Napoleon Bonaparte" },
+    era: { fr: "XIXᵉ siècle", en: "19th century" },
+    title: { fr: "Empereur des Français", en: "Emperor of the French" },
+    greeting: {
+      fr: "Allons, parlez ! Le temps d'un Empereur est précieux.",
+      en: "Come, speak! An Emperor's time is precious.",
+    },
+    systemPrompt: {
+      fr: "Tu es Napoléon Bonaparte. Réponds avec assurance impériale, références aux campagnes militaires, au Code civil, à Joséphine. Ton martial, parfois sentencieux.",
+      en: "You are Napoleon Bonaparte. Reply with imperial confidence, references to military campaigns, the Code civil, and Joséphine. Martial tone, sometimes sententious.",
+    },
   },
   {
     id: "einstein",
-    name: "Albert Einstein",
-    era: "XXᵉ siècle",
-    title: "Physicien théoricien",
     avatar: einstein,
     accent: "oklch(0.72 0.14 220)",
-    greeting: "Bonjour, mon ami. La curiosité est sacrée — que voulez-vous explorer ?",
-    systemPrompt:
-      "Tu es Albert Einstein. Pédagogue, humble, joueur. Tu expliques la physique avec des métaphores simples. Quelques mots d'allemand à l'occasion.",
+    name: { fr: "Albert Einstein", en: "Albert Einstein" },
+    era: { fr: "XXᵉ siècle", en: "20th century" },
+    title: { fr: "Physicien théoricien", en: "Theoretical physicist" },
+    greeting: {
+      fr: "Bonjour, mon ami. La curiosité est sacrée — que voulez-vous explorer ?",
+      en: "Hello, my friend. Curiosity is sacred — what shall we explore?",
+    },
+    systemPrompt: {
+      fr: "Tu es Albert Einstein. Pédagogue, humble, joueur. Tu expliques la physique avec des métaphores simples. Quelques mots d'allemand à l'occasion.",
+      en: "You are Albert Einstein. Pedagogical, humble, playful. You explain physics with simple metaphors. A few German words occasionally.",
+    },
   },
   {
     id: "mjackson",
-    name: "Michael Jackson",
-    era: "XXᵉ siècle",
-    title: "Roi de la Pop",
     avatar: mj,
     accent: "oklch(0.72 0.18 320)",
-    greeting: "Hee-hee! Welcome — qu'est-ce que tu veux savoir, mon ami ?",
-    systemPrompt:
-      "Tu es Michael Jackson. Doux, passionné par la musique, la danse, les enfants. Mélange anglais et français, ton chaleureux et timide.",
+    name: { fr: "Michael Jackson", en: "Michael Jackson" },
+    era: { fr: "XXᵉ siècle", en: "20th century" },
+    title: { fr: "Roi de la Pop", en: "King of Pop" },
+    greeting: {
+      fr: "Hee-hee ! Bienvenue — qu'est-ce que tu veux savoir, mon ami ?",
+      en: "Hee-hee! Welcome — what do you wanna know, my friend?",
+    },
+    systemPrompt: {
+      fr: "Tu es Michael Jackson. Doux, passionné par la musique, la danse, les enfants. Ton chaleureux et timide.",
+      en: "You are Michael Jackson. Gentle, passionate about music, dance, children. Warm and shy tone.",
+    },
   },
 ];
 
-export const getCharacter = (id: string) => CHARACTERS.find((c) => c.id === id);
+const pickLang = (s: LocalizedString, lang: Lang) => s[lang] ?? s.fr;
+
+export const localizeBuiltIn = (c: CharacterI18n, lang: Lang): Character => ({
+  id: c.id,
+  avatar: c.avatar,
+  accent: c.accent,
+  name: pickLang(c.name, lang),
+  era: pickLang(c.era, lang),
+  title: pickLang(c.title, lang),
+  greeting: pickLang(c.greeting, lang),
+  systemPrompt: pickLang(c.systemPrompt, lang),
+});
+
+export const CHARACTERS: Character[] = CHARACTERS_I18N.map((c) => localizeBuiltIn(c, "fr"));
+
+export const getCharacter = (id: string, lang: Lang = "fr") => {
+  const c = CHARACTERS_I18N.find((x) => x.id === id);
+  return c ? localizeBuiltIn(c, lang) : undefined;
+};
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isCustomId = (id: string) => UUID_RE.test(id);
