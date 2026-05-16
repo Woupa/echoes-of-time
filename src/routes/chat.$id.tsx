@@ -155,7 +155,7 @@ function Chat() {
   }
 
   const playReply = async (text: string) => {
-    if (!isCustom || !text.trim()) return;
+    if (!isCustom || !text.trim() || muted) return;
     try {
       const { audio, mime } = await speak({ data: { characterId: id, text } });
       const url = `data:${mime};base64,${audio}`;
@@ -166,6 +166,60 @@ function Chat() {
       }
     } catch (err) {
       console.error("TTS error:", err);
+    }
+  };
+
+  const toggleMute = () => {
+    setMuted((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("voice_muted", next ? "1" : "0");
+      }
+      if (next && audioRef.current) {
+        audioRef.current.pause();
+      }
+      return next;
+    });
+  };
+
+  const handleShare = async () => {
+    if (!user) {
+      navigate({ to: "/auth" });
+      return;
+    }
+    setSharing(true);
+    try {
+      let cid = conversationIdRef.current;
+      if (!cid) {
+        const { data, error } = await supabase
+          .from("conversations")
+          .insert({ user_id: user.id, character_id: id, title: character?.name ?? "" })
+          .select("id, share_token")
+          .single();
+        if (error || !data) throw error ?? new Error("création conversation échouée");
+        conversationIdRef.current = data.id;
+        setConversationId(data.id);
+      }
+      cid = conversationIdRef.current!;
+      const { data: updated, error: updErr } = await supabase
+        .from("conversations")
+        .update({ is_public: true })
+        .eq("id", cid)
+        .select("share_token")
+        .single();
+      if (updErr || !updated) throw updErr ?? new Error("activation partage échouée");
+      const url = `${window.location.origin}/shared/${updated.share_token}`;
+      setShareUrl(url);
+      try {
+        await navigator.clipboard.writeText(url);
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 2000);
+      } catch { /* clipboard refused */ }
+    } catch (err) {
+      console.error("share error:", err);
+      setMicError(err instanceof Error ? err.message : "Partage impossible");
+    } finally {
+      setSharing(false);
     }
   };
 
