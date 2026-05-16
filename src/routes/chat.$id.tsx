@@ -363,6 +363,14 @@ function Chat() {
         </div>
       )}
 
+      {micError && (
+        <div className="absolute inset-x-0 bottom-36 z-20 mx-auto max-w-md px-6">
+          <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-center text-xs text-destructive">
+            {micError}
+          </div>
+        </div>
+      )}
+
       {/* Action bar */}
       <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-background via-background/95 to-transparent pb-8 pt-12">
         <div className="mx-auto flex max-w-md items-center justify-around px-6">
