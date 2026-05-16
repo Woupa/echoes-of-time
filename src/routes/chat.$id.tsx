@@ -102,6 +102,7 @@ function Chat() {
           ...m,
           { role: "assistant", content: reply, reactionIdx },
         ]);
+        void playReply(reply);
       } else {
         const nextIdx = reactions.length > 0 ? Math.floor(Math.random() * reactions.length) : 0;
         setCurrentReactionIdx(nextIdx);
