@@ -1,5 +1,4 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
 import austerlitz from "@/assets/austerlitz.jpg";
 
 export const Route = createFileRoute("/")({
@@ -8,11 +7,6 @@ export const Route = createFileRoute("/")({
 
 function Splash() {
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const t = setTimeout(() => navigate({ to: "/select" }), 3200);
-    return () => clearTimeout(t);
-  }, [navigate]);
 
   return (
     <button
