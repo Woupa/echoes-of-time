@@ -738,6 +738,16 @@ function Chat() {
                 <X className="h-4 w-4" />
               </button>
             </div>
+            <div className="border-b border-border px-5 py-3">
+              <button
+                onClick={handleExportTxt}
+                disabled={messages.length === 0}
+                className="flex items-center gap-2 rounded-full border border-gold/40 bg-card/60 px-3 py-1.5 text-xs text-gold hover:bg-accent disabled:opacity-50"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {t("export_txt")}
+              </button>
+            </div>
             <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
               {messages.map((m, i) => (
                 <div key={i} className={m.role === "user" ? "ml-auto max-w-[80%]" : "mr-auto max-w-[85%]"}>
