@@ -66,11 +66,19 @@ function Chat() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
+  const [muted, setMuted] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("voice_muted") === "1";
+  });
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const lastAudioB64Ref = useRef<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const conversationIdRef = useRef<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
 
   // Inactivity → retour à l'accueil après 60s
   const lastActivityRef = useRef(Date.now());
