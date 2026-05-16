@@ -138,6 +138,62 @@ const GRADIUM_FR_VOICES = [
 
 const DEFAULT_GRADIUM_VOICE = "axlOaUiFyOZhy4nv"; // Leo — neutral fallback
 
+// Distinct voices for built-in characters (picked to match each persona)
+const BUILTIN_VOICES: Record<string, string> = {
+  napoleon: "B09t5S64xLaKwXeW", // Vincent — warm wise male, historical narration, authoritative
+  einstein: "IB53xJtufx1sbfbt", // Kevin — sincere emotional male, depth and wisdom
+  mjackson: "L6OaiBybqikfCBk0", // Manu — pleasant low-pitch smooth young male
+};
+
+// Strip stage-direction brackets like [voix grave], [rires], [pause] before TTS
+function stripStageDirections(text: string): string {
+  return text.replace(/\[[^\]]{1,40}\]/g, "").replace(/\s{2,}/g, " ").trim();
+}
+
+async function resolveVoiceId(characterId: string): Promise<string> {
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(characterId);
+  if (isUuid) {
+    const { data: char } = await supabaseAdmin
+      .from("characters")
+      .select("voice_id")
+      .eq("id", characterId)
+      .single();
+    const stored = (char?.voice_id as string | null) ?? DEFAULT_GRADIUM_VOICE;
+    return GRADIUM_FR_VOICES.some((v) => v.id === stored) ? stored : DEFAULT_GRADIUM_VOICE;
+  }
+  return BUILTIN_VOICES[characterId] ?? DEFAULT_GRADIUM_VOICE;
+}
+
+async function gradiumTtsBase64(voiceId: string, rawText: string): Promise<{ audio: string; mime: string } | null> {
+  const apiKey = process.env.Gradium;
+  if (!apiKey) return null;
+  const text = stripStageDirections(rawText);
+  if (!text) return null;
+  try {
+    const res = await fetch("https://api.gradium.ai/api/post/speech/tts", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        voice_id: voiceId,
+        output_format: "wav",
+        only_audio: true,
+      }),
+    });
+    if (!res.ok) return null;
+    const buf = await res.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let binary = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    return { audio: btoa(binary), mime: "audio/wav" };
+  } catch {
+    return null;
+  }
+}
+
 async function pickGradiumVoiceWithGpt(args: {
   name: string;
   era: string;
@@ -430,6 +486,7 @@ const ChatInput = z.object({
     )
     .min(1)
     .max(40),
+  withAudio: z.boolean().optional(),
 });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -496,7 +553,7 @@ Réponds STRICTEMENT en JSON valide, sans markdown, sans texte autour, au format
 
     const system = `${char.system_prompt}
 
-Tu es ${char.name}. Réponds toujours en français, dans ton style propre, en 1 à 3 phrases vivantes.
+Tu es ${char.name}. Réponds toujours en français, dans ton style propre, en 1 à 3 phrases vivantes, expressives et chargées d'émotion (joie, gravité, malice, indignation, tendresse selon le contexte). Varie le rythme : phrases courtes pour l'intensité, plus longues pour la confidence. Utilise des points d'exclamation, suspensions… et virgules pour guider l'intonation. Tu peux insérer de brèves indications scéniques entre crochets pour colorer la voix : [voix grave], [rires], [chuchotement], [pause], [avec fierté], [ému]. Maximum 2 indications par réplique.
 
 ${reactionInstruction}`;
 
@@ -574,7 +631,14 @@ ${reactionInstruction}`;
     const idx = Number.isInteger(parsed.reactionIdx)
       ? Math.max(0, Math.min(maxIdx, parsed.reactionIdx as number))
       : 0;
-    return { reply, reactionIdx: idx };
+
+    // Generate TTS in the same response when requested (saves a round-trip)
+    if (data.withAudio) {
+      const voiceId = await resolveVoiceId(data.characterId);
+      const tts = await gradiumTtsBase64(voiceId, reply);
+      if (tts) return { reply, reactionIdx: idx, audio: tts.audio, mime: tts.mime };
+    }
+    return { reply, reactionIdx: idx, audio: null as string | null, mime: null as string | null };
   });
 
 export const deleteCustomCharacter = createServerFn({ method: "POST" })
@@ -614,54 +678,11 @@ const SpeakInput = z.object({
 export const synthesizeSpeech = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => SpeakInput.parse(input))
   .handler(async ({ data }) => {
-    const apiKey = process.env.Gradium;
-    if (!apiKey) throw new Error("Clé Gradium manquante côté serveur.");
-
-    // Built-in voice presets for non-UUID character ids
-    const BUILTIN_VOICES: Record<string, string> = {
-      napoleon: DEFAULT_GRADIUM_VOICE,
-      einstein: DEFAULT_GRADIUM_VOICE,
-      mjackson: DEFAULT_GRADIUM_VOICE,
-    };
-
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.characterId);
-    let voiceId = BUILTIN_VOICES[data.characterId] ?? DEFAULT_GRADIUM_VOICE;
-    if (isUuid) {
-      const { data: char } = await supabaseAdmin
-        .from("characters")
-        .select("voice_id")
-        .eq("id", data.characterId)
-        .single();
-      const stored = (char?.voice_id as string | null) ?? DEFAULT_GRADIUM_VOICE;
-      voiceId = GRADIUM_FR_VOICES.some((v) => v.id === stored) ? stored : DEFAULT_GRADIUM_VOICE;
-    }
-
-    const res = await fetch("https://api.gradium.ai/api/post/speech/tts", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        text: data.text,
-        voice_id: voiceId,
-        output_format: "wav",
-        only_audio: true,
-      }),
-    });
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`Gradium TTS ${res.status}: ${txt.slice(0, 200)}`);
-    }
-    const buf = await res.arrayBuffer();
-    const bytes = new Uint8Array(buf);
-    let binary = "";
-    const chunk = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunk) {
-      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-    }
-    const base64 = btoa(binary);
-    return { audio: base64, mime: "audio/wav" };
+    if (!process.env.Gradium) throw new Error("Clé Gradium manquante côté serveur.");
+    const voiceId = await resolveVoiceId(data.characterId);
+    const tts = await gradiumTtsBase64(voiceId, data.text);
+    if (!tts) throw new Error("Gradium TTS indisponible.");
+    return tts;
   });
 
 const TranscribeInput = z.object({

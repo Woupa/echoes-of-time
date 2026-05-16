@@ -254,8 +254,8 @@ function Chat() {
     try {
       if (isCustom || ["napoleon", "einstein", "mjackson"].includes(id)) {
         const history = nextMessages.map((m) => ({ role: m.role, content: m.content }));
-        const { reply, reactionIdx } = await chat({
-          data: { characterId: id, messages: history },
+        const { reply, reactionIdx, audio, mime } = await chat({
+          data: { characterId: id, messages: history, withAudio: !muted },
         });
         setIsThinking(false);
         const safeReactionIdx = reactions.length > 0 ? reactionIdx : 0;
@@ -264,7 +264,13 @@ function Chat() {
         const aMsg: Message = { role: "assistant", content: reply, reactionIdx: safeReactionIdx };
         setMessages((m) => [...m, aMsg]);
         void persistMessages([userMsg, aMsg]);
-        void playReply(reply);
+        if (audio && mime && !muted && audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.src = `data:${mime};base64,${audio}`;
+          void audioRef.current.play().catch(() => {});
+        } else {
+          void playReply(reply);
+        }
       } else {
         const nextIdx = reactions.length > 0 ? Math.floor(Math.random() * reactions.length) : 0;
         setCurrentReactionIdx(nextIdx);
