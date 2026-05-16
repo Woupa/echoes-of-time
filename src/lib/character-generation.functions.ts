@@ -325,8 +325,8 @@ export const generateCharacter = createServerFn({ method: "POST" })
     const characterId = inserted.id as string;
 
     try {
-      // 3) Choix de la voix SLNG (Rime Arcana FR) en parallèle des images
-      const voicesPromise = pickSlngSpeakerWithGpt({
+      // 3) Choix de la voix Gradium FR en parallèle des images (ChatGPT casting)
+      const voicesPromise = pickGradiumVoiceWithGpt({
         name,
         era,
         userContext,
