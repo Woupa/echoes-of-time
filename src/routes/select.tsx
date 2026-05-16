@@ -7,6 +7,7 @@ import { useAllCharacters } from "@/lib/use-characters";
 import { deleteCustomCharacter } from "@/lib/character-generation.functions";
 import { useAuth } from "@/lib/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { LangToggle, useT } from "@/lib/i18n";
 
 export const Route = createFileRoute("/select")({
   component: Select,
@@ -21,6 +22,7 @@ function Select() {
   const removeFn = useServerFn(deleteCustomCharacter);
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { t } = useT();
 
   const filtered = all.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()));
 
@@ -41,25 +43,28 @@ function Select() {
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 pb-12 pt-10">
       <header className="animate-fade-up flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Contacts historiques</p>
-          <h1 className="mt-2 font-display text-4xl text-foreground">Qui voulez-vous appeler ?</h1>
+          <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">{t("contacts_subtitle")}</p>
+          <h1 className="mt-2 font-display text-4xl text-foreground">{t("contacts_title")}</h1>
         </div>
-        {user ? (
-          <button
-            onClick={async () => { await supabase.auth.signOut(); }}
-            className="flex items-center gap-1.5 rounded-full border border-border bg-card/60 px-3 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground hover:text-gold"
-            title={user.email ?? ""}
-          >
-            <User className="h-3 w-3" /> <LogOut className="h-3 w-3" />
-          </button>
-        ) : (
-          <Link
-            to="/auth"
-            className="flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-3 py-1.5 text-[10px] uppercase tracking-widest text-gold hover:bg-gold/20"
-          >
-            <LogIn className="h-3 w-3" /> Compte
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          <LangToggle />
+          {user ? (
+            <button
+              onClick={async () => { await supabase.auth.signOut(); }}
+              className="flex items-center gap-1.5 rounded-full border border-border bg-card/60 px-3 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground hover:text-gold"
+              title={user.email ?? ""}
+            >
+              <User className="h-3 w-3" /> <LogOut className="h-3 w-3" />
+            </button>
+          ) : (
+            <Link
+              to="/auth"
+              className="flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-3 py-1.5 text-[10px] uppercase tracking-widest text-gold hover:bg-gold/20"
+            >
+              <LogIn className="h-3 w-3" /> {t("account")}
+            </Link>
+          )}
+        </div>
       </header>
 
       <div className="animate-fade-up mt-6 flex items-center gap-3 rounded-2xl border border-border bg-card/50 px-4 py-3 backdrop-blur" style={{ animationDelay: "0.1s" }}>
@@ -67,7 +72,7 @@ function Select() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Rechercher un personnage…"
+          placeholder={t("search_placeholder")}
           className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
         />
       </div>
@@ -120,19 +125,19 @@ function Select() {
                       disabled={deletingId === c.id}
                       className="rounded-full bg-destructive px-2 py-1 text-[10px] uppercase tracking-wider text-destructive-foreground disabled:opacity-50"
                     >
-                      {deletingId === c.id ? "…" : "Confirmer"}
+                      {deletingId === c.id ? "…" : t("confirm")}
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); setPendingDelete(null); }}
                       className="rounded-full px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
                     >
-                      Annuler
+                      {t("cancel")}
                     </button>
                   </div>
                 ) : (
                   <button
                     onClick={(e) => { e.stopPropagation(); setPendingDelete(c.id); }}
-                    aria-label={`Supprimer ${c.name}`}
+                    aria-label={`${t("delete")} ${c.name}`}
                     className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-all hover:bg-destructive/15 hover:text-destructive group-hover/row:opacity-100"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -144,7 +149,7 @@ function Select() {
         ))}
 
         {isLoading && (
-          <li className="px-4 py-6 text-center text-xs text-muted-foreground">Chargement des contacts…</li>
+          <li className="px-4 py-6 text-center text-xs text-muted-foreground">{t("contacts_loading")}</li>
         )}
 
         <li className="animate-fade-up" style={{ animationDelay: `${0.15 + filtered.length * 0.06}s` }}>
@@ -156,15 +161,15 @@ function Select() {
               <Plus className="h-6 w-6" />
             </div>
             <div className="flex-1">
-              <p className="font-display text-lg text-gold">Créer un personnage</p>
-              <p className="text-xs text-muted-foreground">L'IA génère personnalité, voix et 6 réactions</p>
+              <p className="font-display text-lg text-gold">{t("create_character")}</p>
+              <p className="text-xs text-muted-foreground">{t("create_character_sub")}</p>
             </div>
           </button>
         </li>
       </ul>
 
       <p className="mt-8 text-center text-xs text-muted-foreground/70">
-        Propulsé par Sonnet · Sélectionnez un contact pour lancer l'appel
+        {t("footer_select")}
       </p>
     </div>
   );
