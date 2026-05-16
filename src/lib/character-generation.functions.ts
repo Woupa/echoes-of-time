@@ -140,14 +140,100 @@ const DEFAULT_GRADIUM_VOICE = "axlOaUiFyOZhy4nv"; // Leo — neutral fallback
 
 // Distinct voices for built-in characters (picked to match each persona)
 const BUILTIN_VOICES: Record<string, string> = {
-  napoleon: "B09t5S64xLaKwXeW", // Vincent — warm wise male, historical narration, authoritative
-  einstein: "IB53xJtufx1sbfbt", // Kevin — sincere emotional male, depth and wisdom
+  napoleon: "hx1RAC4Lqd9xyTAr", // Antoine — gritty confident, intense military authority
+  einstein: "B09t5S64xLaKwXeW", // Vincent — warm wise male, sage historical narration
   mjackson: "L6OaiBybqikfCBk0", // Manu — pleasant low-pitch smooth young male
 };
 
-// Strip stage-direction brackets like [voix grave], [rires], [pause] before TTS
+// Strip stage-direction brackets like [voix grave], [rires], [pause] from displayed/raw text
 function stripStageDirections(text: string): string {
   return text.replace(/\[[^\]]{1,40}\]/g, "").replace(/\s{2,}/g, " ").trim();
+}
+
+// Split a reply into emotion-tagged segments based on stage directions.
+// "[voix grave] Bonjour. [rires] Comment allez-vous ?"
+//   → [{ tag: "voix grave", text: "Bonjour." }, { tag: "rires", text: "Comment allez-vous ?" }]
+function splitIntoEmotionSegments(text: string): { tag: string | null; text: string }[] {
+  const segments: { tag: string | null; text: string }[] = [];
+  const regex = /\[([^\]]{1,40})\]/g;
+  let lastIdx = 0;
+  let pendingTag: string | null = null;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    const chunk = text.slice(lastIdx, match.index).trim();
+    if (chunk) segments.push({ tag: pendingTag, text: chunk });
+    pendingTag = match[1].trim().toLowerCase();
+    lastIdx = match.index + match[0].length;
+  }
+  const tail = text.slice(lastIdx).trim();
+  if (tail) segments.push({ tag: pendingTag, text: tail });
+  if (segments.length === 0) segments.push({ tag: null, text: text.trim() });
+  return segments;
+}
+
+// Map emotion tag → Gradium speed hint (1.0 = normal). Best-effort: if Gradium
+// ignores the param, we still benefit from the natural pause between calls.
+function speedForTag(tag: string | null): number {
+  if (!tag) return 1.0;
+  if (/grave|pause|ému|emu|chuchot|whisper|triste/.test(tag)) return 0.92;
+  if (/rire|laugh|joyeux|fier|excit|énerg|energ/.test(tag)) return 1.06;
+  return 1.0;
+}
+
+// Concatenate multiple PCM WAV buffers into one. Assumes same sample rate / channels.
+function concatWavs(wavs: Uint8Array[]): { audio: string; mime: string } | null {
+  if (wavs.length === 0) return null;
+  const dataChunks: Uint8Array[] = [];
+  let sampleRate = 24000;
+  let numChannels = 1;
+  let bitsPerSample = 16;
+  for (const w of wavs) {
+    if (w.length < 44) continue;
+    const dv = new DataView(w.buffer, w.byteOffset, w.byteLength);
+    let offset = 12;
+    while (offset + 8 <= w.length) {
+      const id = String.fromCharCode(w[offset], w[offset + 1], w[offset + 2], w[offset + 3]);
+      const size = dv.getUint32(offset + 4, true);
+      if (id === "fmt ") {
+        numChannels = dv.getUint16(offset + 10, true);
+        sampleRate = dv.getUint32(offset + 12, true);
+        bitsPerSample = dv.getUint16(offset + 22, true);
+      } else if (id === "data") {
+        dataChunks.push(w.subarray(offset + 8, Math.min(offset + 8 + size, w.length)));
+        break;
+      }
+      offset += 8 + size + (size % 2);
+    }
+  }
+  if (dataChunks.length === 0) return null;
+  const totalLen = dataChunks.reduce((s, d) => s + d.length, 0);
+  const out = new Uint8Array(44 + totalLen);
+  const view = new DataView(out.buffer);
+  const writeStr = (off: number, s: string) => {
+    for (let i = 0; i < s.length; i++) out[off + i] = s.charCodeAt(i);
+  };
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + totalLen, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, (sampleRate * numChannels * bitsPerSample) / 8, true);
+  view.setUint16(32, (numChannels * bitsPerSample) / 8, true);
+  view.setUint16(34, bitsPerSample, true);
+  writeStr(36, "data");
+  view.setUint32(40, totalLen, true);
+  let off = 44;
+  for (const d of dataChunks) { out.set(d, off); off += d.length; }
+  // base64
+  let binary = "";
+  const CH = 0x8000;
+  for (let i = 0; i < out.length; i += CH) {
+    binary += String.fromCharCode(...out.subarray(i, i + CH));
+  }
+  return { audio: btoa(binary), mime: "audio/wav" };
 }
 
 async function resolveVoiceId(characterId: string): Promise<string> {
@@ -164,34 +250,54 @@ async function resolveVoiceId(characterId: string): Promise<string> {
   return BUILTIN_VOICES[characterId] ?? DEFAULT_GRADIUM_VOICE;
 }
 
-async function gradiumTtsBase64(voiceId: string, rawText: string): Promise<{ audio: string; mime: string } | null> {
+async function gradiumTtsRaw(voiceId: string, text: string, speed = 1.0): Promise<Uint8Array | null> {
   const apiKey = process.env.Gradium;
   if (!apiKey) return null;
-  const text = stripStageDirections(rawText);
-  if (!text) return null;
+  const clean = stripStageDirections(text);
+  if (!clean) return null;
   try {
     const res = await fetch("https://api.gradium.ai/api/post/speech/tts", {
       method: "POST",
       headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({
-        text,
+        text: clean,
         voice_id: voiceId,
         output_format: "wav",
         only_audio: true,
+        speed,
       }),
     });
     if (!res.ok) return null;
     const buf = await res.arrayBuffer();
-    const bytes = new Uint8Array(buf);
-    let binary = "";
-    const chunk = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunk) {
-      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-    }
-    return { audio: btoa(binary), mime: "audio/wav" };
+    return new Uint8Array(buf);
   } catch {
     return null;
   }
+}
+
+// Multi-segment TTS: splits by stage directions, varies speed per emotion tag,
+// concatenates into a single WAV so the audio flows naturally as one stream.
+async function gradiumTtsBase64(
+  voiceId: string,
+  rawText: string,
+): Promise<{ audio: string; mime: string } | null> {
+  const segments = splitIntoEmotionSegments(rawText);
+  const filtered = segments.filter((s) => s.text.trim().length > 0);
+  if (filtered.length === 0) return null;
+
+  // Single segment → single call (faster path)
+  if (filtered.length === 1) {
+    const wav = await gradiumTtsRaw(voiceId, filtered[0].text, speedForTag(filtered[0].tag));
+    if (!wav) return null;
+    return concatWavs([wav]);
+  }
+
+  const wavs = await Promise.all(
+    filtered.map((s) => gradiumTtsRaw(voiceId, s.text, speedForTag(s.tag))),
+  );
+  const valid = wavs.filter((w): w is Uint8Array => w !== null);
+  if (valid.length === 0) return null;
+  return concatWavs(valid);
 }
 
 async function pickGradiumVoiceWithGpt(args: {
