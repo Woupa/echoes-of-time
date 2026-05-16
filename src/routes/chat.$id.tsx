@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useCharacter } from "@/lib/use-characters";
 import { chatWithCharacter, synthesizeSpeech, transcribeAudio } from "@/lib/character-generation.functions";
 import type { Reaction } from "@/lib/characters";
-import { AvatarSvg, type AvatarState } from "@/components/AvatarSvg";
+
 import { useAuth } from "@/lib/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 
