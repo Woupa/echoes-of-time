@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { Mic, Keyboard, History, Film, Bookmark, PhoneOff, Send, X, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { useCharacter } from "@/lib/use-characters";
+import { chatWithCharacter } from "@/lib/character-generation.functions";
 import type { Reaction } from "@/lib/characters";
 
 export const Route = createFileRoute("/chat/$id")({
