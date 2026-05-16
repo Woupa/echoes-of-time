@@ -405,6 +405,22 @@ function Chat() {
     };
   }, []);
 
+  if (isLoading || authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-gold" />
+      </div>
+    );
+  }
+
+  if (!character) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Link to="/select" className="text-gold underline">Retour</Link>
+      </div>
+    );
+  }
+
   const toggleMic = () => {
     if (isRecording) stopRecording();
     else void startRecording();
