@@ -585,7 +585,7 @@ function Chat() {
                 if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); }
               }}
               rows={1}
-              placeholder={`Écrivez à ${character.name.split(" ")[0]}…`}
+              placeholder={`${t("write_to")} ${character.name.split(" ")[0]}…`}
               className="max-h-32 flex-1 resize-none bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground"
             />
             <button type="submit" className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-transform active:scale-95">
