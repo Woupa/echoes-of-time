@@ -66,6 +66,7 @@ function Chat() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
+  const lastAudioB64Ref = useRef<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
@@ -262,24 +263,50 @@ function Chat() {
     }
 
     const blob = encodeWav(samples, sampleRate);
+    const buf = await blob.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let bin = "";
+    const CH = 0x8000;
+    for (let i = 0; i < bytes.length; i += CH) {
+      bin += String.fromCharCode(...bytes.subarray(i, i + CH));
+    }
+    const b64 = btoa(bin);
+    lastAudioB64Ref.current = b64;
+    setMicError(null);
     setIsTranscribing(true);
     try {
-      const buf = await blob.arrayBuffer();
-      const bytes = new Uint8Array(buf);
-      let bin = "";
-      const CH = 0x8000;
-      for (let i = 0; i < bytes.length; i += CH) {
-        bin += String.fromCharCode(...bytes.subarray(i, i + CH));
-      }
-      const b64 = btoa(bin);
       const { text } = await transcribe({
         data: { audioBase64: b64, mime: "audio/wav" },
       });
       setIsTranscribing(false);
+      lastAudioB64Ref.current = null;
       if (text) await send(text);
     } catch (err) {
       setIsTranscribing(false);
-      setMicError(err instanceof Error ? err.message : "Transcription échouée");
+      const raw = err instanceof Error ? err.message : "Transcription échouée";
+      const isFormat = /unsupported content type|Format audio non supporté|Gradium STT \d+/i.test(raw);
+      setMicError(
+        isFormat
+          ? "Le service de transcription n'a pas pu lire l'audio. Réessayez l'envoi ou recommencez l'enregistrement."
+          : `Transcription échouée : ${raw}`,
+      );
+    }
+  }, [send, transcribe]);
+
+  const retryTranscription = useCallback(async () => {
+    const b64 = lastAudioB64Ref.current;
+    if (!b64) return;
+    setMicError(null);
+    setIsTranscribing(true);
+    try {
+      const { text } = await transcribe({ data: { audioBase64: b64, mime: "audio/wav" } });
+      setIsTranscribing(false);
+      lastAudioB64Ref.current = null;
+      if (text) await send(text);
+    } catch (err) {
+      setIsTranscribing(false);
+      const raw = err instanceof Error ? err.message : "Transcription échouée";
+      setMicError(`Nouvelle tentative échouée : ${raw}`);
     }
   }, [send, transcribe]);
 
@@ -437,8 +464,27 @@ function Chat() {
 
       {micError && (
         <div className="absolute inset-x-0 bottom-36 z-20 mx-auto max-w-md px-6">
-          <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-center text-xs text-destructive">
-            {micError}
+          <div className="flex flex-col items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-center text-xs text-destructive">
+            <span>{micError}</span>
+            <div className="flex gap-2">
+              {lastAudioB64Ref.current && (
+                <button
+                  type="button"
+                  onClick={retryTranscription}
+                  disabled={isTranscribing}
+                  className="rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/20 disabled:opacity-50"
+                >
+                  {isTranscribing ? "Nouvelle tentative…" : "Réessayer"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setMicError(null)}
+                className="rounded-md border border-destructive/30 px-2 py-1 text-[11px] font-medium text-destructive/80 hover:bg-destructive/10"
+              >
+                Fermer
+              </button>
+            </div>
           </div>
         </div>
       )}
