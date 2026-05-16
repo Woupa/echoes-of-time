@@ -515,3 +515,53 @@ export const synthesizeSpeech = createServerFn({ method: "POST" })
     const base64 = btoa(binary);
     return { audio: base64, mime: "audio/mpeg" };
   });
+
+const TranscribeInput = z.object({
+  audioBase64: z.string().min(10).max(15_000_000),
+  mime: z.string().min(3).max(60).default("audio/webm"),
+});
+
+export const transcribeAudio = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => TranscribeInput.parse(input))
+  .handler(async ({ data }) => {
+    const apiKey = process.env.Gradium;
+    if (!apiKey) throw new Error("Clé Gradium manquante côté serveur.");
+
+    // base64 -> bytes
+    const binary = atob(data.audioBase64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+    const cfg = encodeURIComponent(JSON.stringify({ language: "fr" }));
+    const res = await fetch(
+      `https://api.gradium.ai/api/post/speech/asr?json_config=${cfg}`,
+      {
+        method: "POST",
+        headers: {
+          "x-api-key": apiKey,
+          "Content-Type": data.mime,
+        },
+        body: bytes,
+      },
+    );
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`Gradium STT ${res.status}: ${txt.slice(0, 300)}`);
+    }
+
+    // NDJSON streamed body — accumulate text chunks
+    const raw = await res.text();
+    const lines = raw.split("\n").filter((l) => l.trim().length > 0);
+    let transcript = "";
+    for (const line of lines) {
+      try {
+        const msg = JSON.parse(line) as { type?: string; text?: string };
+        if ((msg.type === "text" || msg.type === "end_text") && typeof msg.text === "string") {
+          transcript += (transcript && !transcript.endsWith(" ") ? " " : "") + msg.text;
+        }
+      } catch {
+        // ignore malformed line
+      }
+    }
+    return { text: transcript.trim() };
+  });
