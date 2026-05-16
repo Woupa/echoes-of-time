@@ -577,8 +577,8 @@ const SpeakInput = z.object({
 export const synthesizeSpeech = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => SpeakInput.parse(input))
   .handler(async ({ data }) => {
-    const apiKey = process.env.SLNG;
-    if (!apiKey) throw new Error("Clé SLNG manquante côté serveur.");
+    const apiKey = process.env.Gradium;
+    if (!apiKey) throw new Error("Clé Gradium manquante côté serveur.");
 
     const { data: char, error } = await supabaseAdmin
       .from("characters")
@@ -586,25 +586,25 @@ export const synthesizeSpeech = createServerFn({ method: "POST" })
       .eq("id", data.characterId)
       .single();
     if (error || !char) throw new Error(`Personnage introuvable : ${error?.message}`);
-    const stored = (char.voice_id as string | null) ?? "serrin_joseph";
-    const speaker = SLNG_FR_SPEAKERS.some((v) => v.id === stored) ? stored : "serrin_joseph";
+    const stored = (char.voice_id as string | null) ?? DEFAULT_GRADIUM_VOICE;
+    const voiceId = GRADIUM_FR_VOICES.some((v) => v.id === stored) ? stored : DEFAULT_GRADIUM_VOICE;
 
-    const res = await fetch("https://api.slng.ai/v1/tts/slng/rime/arcana:fr", {
+    const res = await fetch("https://api.gradium.ai/api/post/speech/tts", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        "x-api-key": apiKey,
         "Content-Type": "application/json",
-        Accept: "audio/mpeg",
       },
       body: JSON.stringify({
         text: data.text,
-        speaker,
-        config: { encoding: "mp3", sample_rate: 24000 },
+        voice_id: voiceId,
+        output_format: "wav",
+        only_audio: true,
       }),
     });
     if (!res.ok) {
       const txt = await res.text();
-      throw new Error(`SLNG TTS ${res.status}: ${txt.slice(0, 200)}`);
+      throw new Error(`Gradium TTS ${res.status}: ${txt.slice(0, 200)}`);
     }
     const buf = await res.arrayBuffer();
     const bytes = new Uint8Array(buf);
@@ -614,7 +614,7 @@ export const synthesizeSpeech = createServerFn({ method: "POST" })
       binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
     }
     const base64 = btoa(binary);
-    return { audio: base64, mime: "audio/mpeg" };
+    return { audio: base64, mime: "audio/wav" };
   });
 
 const TranscribeInput = z.object({
