@@ -241,6 +241,7 @@ function Chat() {
           .single();
         if (error || !data) return;
         conversationIdRef.current = data.id;
+        setConversationId(data.id);
       }
       const cid = conversationIdRef.current;
       await supabase.from("messages").insert(
