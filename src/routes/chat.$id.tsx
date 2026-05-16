@@ -27,6 +27,9 @@ function Chat() {
   const [reactingTick, setReactingTick] = useState(0);
   const [specialTick, setSpecialTick] = useState(0);
   const [currentReactionIdx, setCurrentReactionIdx] = useState<number>(0);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -91,9 +94,6 @@ function Chat() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [micError, setMicError] = useState<string | null>(null);
 
   if (isLoading) {
     return (
