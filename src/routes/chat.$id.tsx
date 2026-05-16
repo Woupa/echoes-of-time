@@ -458,22 +458,39 @@ function Chat() {
       )}
 
       {/* Header */}
-      <header className="relative z-10 flex items-center justify-between px-5 pt-6">
-        <div className="flex items-center gap-3">
+      <header className="relative z-10 flex items-center justify-between gap-2 px-5 pt-6">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleMute}
+            aria-label={muted ? "Réactiver la voix" : "Couper la voix"}
+            title={muted ? "Réactiver la voix" : "Couper la voix"}
+            className={`flex h-10 w-10 items-center justify-center rounded-full border backdrop-blur transition-colors ${muted ? "border-destructive/50 bg-destructive/15 text-destructive" : "border-gold/40 bg-card/60 text-gold hover:bg-accent"}`}
+          >
+            {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+          </button>
           <div className="relative">
             <img src={character.avatar} width={44} height={44} alt="" className="h-11 w-11 rounded-full object-cover ring-1 ring-gold/40" />
-            {isSpeaking && (
+            {isSpeaking && !muted && (
               <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-call ring-2 ring-background" />
             )}
           </div>
           <div>
             <p className="font-display text-lg leading-tight">{character.name}</p>
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-              {isSpeaking ? "Parle…" : "En ligne · Pionnier"}
+              {muted ? "Voix coupée" : isSpeaking ? "Parle…" : "En ligne · Pionnier"}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleShare}
+            disabled={sharing}
+            className="flex items-center gap-1.5 rounded-full border border-gold/40 bg-card/60 px-3 py-1.5 text-xs text-gold backdrop-blur hover:bg-accent disabled:opacity-50"
+            aria-label="Partager la conversation"
+          >
+            {sharing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : shareCopied ? <Check className="h-3.5 w-3.5" /> : <Share2 className="h-3.5 w-3.5" />}
+            {shareCopied ? "Copié" : "Partager"}
+          </button>
           <Link
             to="/"
             className="flex items-center gap-1.5 rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs backdrop-blur hover:bg-accent"
@@ -489,6 +506,37 @@ function Chat() {
           </button>
         </div>
       </header>
+
+      {/* Share link toast */}
+      {shareUrl && (
+        <div className="absolute left-1/2 top-20 z-30 -translate-x-1/2 max-w-md rounded-xl border border-gold/40 bg-card/95 px-4 py-3 text-xs shadow-cinema backdrop-blur">
+          <p className="mb-1 font-medium text-gold">Lien de partage {shareCopied && "(copié)"}</p>
+          <div className="flex items-center gap-2">
+            <input
+              readOnly
+              value={shareUrl}
+              onFocus={(e) => e.currentTarget.select()}
+              className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-[11px]"
+            />
+            <button
+              onClick={() => { void navigator.clipboard.writeText(shareUrl).then(() => { setShareCopied(true); setTimeout(() => setShareCopied(false), 1500); }); }}
+              className="rounded-md border border-gold/40 px-2 py-1 text-[11px] text-gold hover:bg-accent"
+            >
+              Copier
+            </button>
+            <button
+              onClick={() => setShareUrl(null)}
+              className="rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent"
+              aria-label="Fermer"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+          <p className="mt-2 text-[10px] text-muted-foreground">
+            Toute personne avec ce lien pourra lire la conversation.
+          </p>
+        </div>
+      )}
 
       {/* Live subtitle of assistant */}
       <main className="relative z-10 flex flex-1 flex-col items-center justify-end px-6 pb-44">
