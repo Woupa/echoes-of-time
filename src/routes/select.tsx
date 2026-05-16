@@ -43,25 +43,28 @@ function Select() {
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 pb-12 pt-10">
       <header className="animate-fade-up flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Contacts historiques</p>
-          <h1 className="mt-2 font-display text-4xl text-foreground">Qui voulez-vous appeler ?</h1>
+          <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">{t("contacts_subtitle")}</p>
+          <h1 className="mt-2 font-display text-4xl text-foreground">{t("contacts_title")}</h1>
         </div>
-        {user ? (
-          <button
-            onClick={async () => { await supabase.auth.signOut(); }}
-            className="flex items-center gap-1.5 rounded-full border border-border bg-card/60 px-3 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground hover:text-gold"
-            title={user.email ?? ""}
-          >
-            <User className="h-3 w-3" /> <LogOut className="h-3 w-3" />
-          </button>
-        ) : (
-          <Link
-            to="/auth"
-            className="flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-3 py-1.5 text-[10px] uppercase tracking-widest text-gold hover:bg-gold/20"
-          >
-            <LogIn className="h-3 w-3" /> Compte
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          <LangToggle />
+          {user ? (
+            <button
+              onClick={async () => { await supabase.auth.signOut(); }}
+              className="flex items-center gap-1.5 rounded-full border border-border bg-card/60 px-3 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground hover:text-gold"
+              title={user.email ?? ""}
+            >
+              <User className="h-3 w-3" /> <LogOut className="h-3 w-3" />
+            </button>
+          ) : (
+            <Link
+              to="/auth"
+              className="flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-3 py-1.5 text-[10px] uppercase tracking-widest text-gold hover:bg-gold/20"
+            >
+              <LogIn className="h-3 w-3" /> {t("account")}
+            </Link>
+          )}
+        </div>
       </header>
 
       <div className="animate-fade-up mt-6 flex items-center gap-3 rounded-2xl border border-border bg-card/50 px-4 py-3 backdrop-blur" style={{ animationDelay: "0.1s" }}>
