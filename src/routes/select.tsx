@@ -125,19 +125,19 @@ function Select() {
                       disabled={deletingId === c.id}
                       className="rounded-full bg-destructive px-2 py-1 text-[10px] uppercase tracking-wider text-destructive-foreground disabled:opacity-50"
                     >
-                      {deletingId === c.id ? "…" : "Confirmer"}
+                      {deletingId === c.id ? "…" : t("confirm")}
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); setPendingDelete(null); }}
                       className="rounded-full px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
                     >
-                      Annuler
+                      {t("cancel")}
                     </button>
                   </div>
                 ) : (
                   <button
                     onClick={(e) => { e.stopPropagation(); setPendingDelete(c.id); }}
-                    aria-label={`Supprimer ${c.name}`}
+                    aria-label={`${t("delete")} ${c.name}`}
                     className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-all hover:bg-destructive/15 hover:text-destructive group-hover/row:opacity-100"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -149,7 +149,7 @@ function Select() {
         ))}
 
         {isLoading && (
-          <li className="px-4 py-6 text-center text-xs text-muted-foreground">Chargement des contacts…</li>
+          <li className="px-4 py-6 text-center text-xs text-muted-foreground">{t("contacts_loading")}</li>
         )}
 
         <li className="animate-fade-up" style={{ animationDelay: `${0.15 + filtered.length * 0.06}s` }}>
@@ -161,15 +161,15 @@ function Select() {
               <Plus className="h-6 w-6" />
             </div>
             <div className="flex-1">
-              <p className="font-display text-lg text-gold">Créer un personnage</p>
-              <p className="text-xs text-muted-foreground">L'IA génère personnalité, voix et 6 réactions</p>
+              <p className="font-display text-lg text-gold">{t("create_character")}</p>
+              <p className="text-xs text-muted-foreground">{t("create_character_sub")}</p>
             </div>
           </button>
         </li>
       </ul>
 
       <p className="mt-8 text-center text-xs text-muted-foreground/70">
-        Propulsé par Sonnet · Sélectionnez un contact pour lancer l'appel
+        {t("footer_select")}
       </p>
     </div>
   );
