@@ -92,6 +92,77 @@ Choisis les 6 réactions qui révèlent VRAIMENT ce personnage (ex pour Einstein
   return parsed;
 }
 
+type GradiumVoice = {
+  uid: string;
+  name: string;
+  description?: string | null;
+  language?: string | null;
+  tags?: { name?: string; value?: string }[];
+};
+
+async function listGradiumVoices(): Promise<GradiumVoice[]> {
+  const apiKey = process.env.Gradium;
+  if (!apiKey) throw new Error("Clé Gradium manquante côté serveur.");
+  const res = await fetch(
+    "https://api.gradium.ai/api/voices/?include_catalog=true&limit=200",
+    { headers: { "x-api-key": apiKey } },
+  );
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`Gradium voices ${res.status}: ${txt.slice(0, 200)}`);
+  }
+  return (await res.json()) as GradiumVoice[];
+}
+
+async function pickVoiceWithGpt(args: {
+  name: string;
+  era: string;
+  userContext: string;
+  basePortraitPrompt: string;
+  voices: GradiumVoice[];
+}): Promise<string> {
+  const apiKey = process.env.ChatGPT;
+  if (!apiKey) throw new Error("Clé ChatGPT manquante côté serveur.");
+
+  const compact = args.voices.map((v) => ({
+    uid: v.uid,
+    name: v.name,
+    language: v.language ?? null,
+    description: (v.description ?? "").slice(0, 160),
+  }));
+
+  const system = `Tu es directeur de casting vocal. On te donne un personnage et une liste de voix (catalogue TTS). Choisis LA voix la plus adaptée à son époque, sa langue (préférer 'fr' si le personnage parle français, sinon 'en'), son genre et son tempérament. Réponds STRICTEMENT en JSON : {"uid": "<voice uid>"}.`;
+  const user = `Personnage : ${args.name}
+Époque : ${args.era}
+Contexte : ${args.userContext}
+Description visuelle : ${args.basePortraitPrompt}
+
+Voix disponibles (JSON) :
+${JSON.stringify(compact)}`;
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.4,
+    }),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`OpenAI voix ${res.status}: ${txt.slice(0, 200)}`);
+  }
+  const j = await res.json();
+  const parsed = JSON.parse(j.choices?.[0]?.message?.content ?? "{}") as { uid?: string };
+  const chosen = args.voices.find((v) => v.uid === parsed.uid);
+  return (chosen ?? args.voices[0]).uid;
+}
+
 async function generateFalImage(prompt: string): Promise<ArrayBuffer> {
   const apiKey = process.env.Fal;
   if (!apiKey) throw new Error("Clé Fal manquante côté serveur.");
