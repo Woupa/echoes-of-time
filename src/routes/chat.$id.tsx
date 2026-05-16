@@ -58,11 +58,11 @@ function Chat() {
 
   const avatarState: AvatarState = pulseState
     ? pulseState
-    : isThinking
+    : isThinking || isTranscribing
       ? "thinking"
       : isSpeaking
         ? "talking"
-        : mode === "voice" && input.length === 0
+        : isRecording || (mode === "voice" && input.length === 0)
           ? "listening"
           : "idle";
 
