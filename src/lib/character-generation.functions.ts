@@ -100,9 +100,6 @@ type GptPlan = {
 };
 
 async function callChatGpt(name: string, era: string, userContext: string): Promise<GptPlan> {
-  const apiKey = process.env.ChatGPT;
-  if (!apiKey) throw new Error("Clé ChatGPT manquante côté serveur.");
-
   const system = `Tu es un directeur artistique. À partir d'une figure historique ou fictive, tu produis UN JSON STRICT (aucun markdown) avec :
 - title (court titre/fonction)
 - accent (couleur hex caractéristique du personnage, ex #c9a84c)
@@ -116,35 +113,30 @@ async function callChatGpt(name: string, era: string, userContext: string): Prom
   - description (1 phrase courte décrivant l'émotion)
   - visualPrompt (EN ANGLAIS. DOIT AUSSI COMMENCER par "Photorealistic portrait of <FULL NAME>, " et reprendre les MÊMES traits iconiques que basePortraitPrompt, puis ajouter l'expression/posture spécifique à cette émotion)
 
-Choisis les 6 réactions qui révèlent VRAIMENT ce personnage (ex pour Einstein : Eurêka, Pensif, Espiègle, Indigné par la guerre, Émerveillé, Mélancolique ; pour MJ : Moonwalk, Cri aigu, Timide, Dansant, Touché, Concentré sur scène).`;
+Choisis les 6 réactions qui révèlent VRAIMENT ce personnage (ex pour Einstein : Eurêka, Pensif, Espiègle, Indigné par la guerre, Émerveillé, Mélancolique ; pour MJ : Moonwalk, Cri aigu, Timide, Dansant, Touché, Concentré sur scène).
+
+Réponds STRICTEMENT en JSON valide, sans markdown, sans texte autour.`;
 
   const user = `Personnage : ${name}\nÉpoque : ${era}\nContexte fourni par l'utilisateur :\n${userContext}`;
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.8,
-    }),
+  const content = await callLlm({
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    jsonMode: true,
+    temperature: 0.8,
   });
 
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`OpenAI ${res.status}: ${txt.slice(0, 300)}`);
-  }
-  const data = await res.json();
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("Réponse ChatGPT vide.");
-  const parsed = JSON.parse(content) as GptPlan;
+  // Extract JSON object even if model wraps it in prose / markdown
+  let jsonStr = content.trim();
+  const fenced = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) jsonStr = fenced[1].trim();
+  const firstBrace = jsonStr.indexOf("{");
+  const lastBrace = jsonStr.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1) jsonStr = jsonStr.slice(firstBrace, lastBrace + 1);
+
+  const parsed = JSON.parse(jsonStr) as GptPlan;
 
   // Sanitize
   parsed.reactions = (parsed.reactions || []).slice(0, 6).map((r) => ({
