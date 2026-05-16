@@ -5,6 +5,71 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 const ANIMATIONS = ["pulse", "shake", "bounce", "breathe", "tilt", "glow", "shimmer"] as const;
 type Animation = (typeof ANIMATIONS)[number];
 
+// ===== LLM helper: Pioneer (primary) + ChatGPT (fallback) =====
+const PIONEER_MODEL = "3143d855-95b1-4da7-afad-d579fcd3d5ed";
+
+async function callLlm(opts: {
+  messages: { role: string; content: string }[];
+  jsonMode?: boolean;
+  temperature?: number;
+}): Promise<string> {
+  const pioneerKey = process.env.PIONEER_API_KEY;
+  const openaiKey = process.env.ChatGPT;
+  if (!pioneerKey && !openaiKey) {
+    throw new Error("Aucun LLM configuré côté serveur (PIONEER_API_KEY ni ChatGPT).");
+  }
+
+  if (pioneerKey) {
+    try {
+      const res = await fetch("https://api.pioneer.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${pioneerKey}`,
+        },
+        body: JSON.stringify({
+          model: PIONEER_MODEL,
+          messages: opts.messages,
+          stream: false,
+        }),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`Pioneer ${res.status}: ${txt.slice(0, 200)}`);
+      }
+      const j = await res.json();
+      const content = j.choices?.[0]?.message?.content;
+      if (!content) throw new Error("Pioneer réponse vide");
+      return content as string;
+    } catch (err) {
+      if (!openaiKey) throw err;
+      console.warn("[llm] Pioneer KO, fallback ChatGPT:", err);
+    }
+  }
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${openaiKey!}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: opts.messages,
+      ...(opts.jsonMode ? { response_format: { type: "json_object" } } : {}),
+      temperature: opts.temperature ?? 0.7,
+    }),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`ChatGPT ${res.status}: ${txt.slice(0, 200)}`);
+  }
+  const j = await res.json();
+  const content = j.choices?.[0]?.message?.content;
+  if (!content) throw new Error("ChatGPT réponse vide");
+  return content as string;
+}
+
 export type ReactionData = {
   label: string;
   emoji: string;
@@ -35,9 +100,6 @@ type GptPlan = {
 };
 
 async function callChatGpt(name: string, era: string, userContext: string): Promise<GptPlan> {
-  const apiKey = process.env.ChatGPT;
-  if (!apiKey) throw new Error("Clé ChatGPT manquante côté serveur.");
-
   const system = `Tu es un directeur artistique. À partir d'une figure historique ou fictive, tu produis UN JSON STRICT (aucun markdown) avec :
 - title (court titre/fonction)
 - accent (couleur hex caractéristique du personnage, ex #c9a84c)
@@ -51,35 +113,30 @@ async function callChatGpt(name: string, era: string, userContext: string): Prom
   - description (1 phrase courte décrivant l'émotion)
   - visualPrompt (EN ANGLAIS. DOIT AUSSI COMMENCER par "Photorealistic portrait of <FULL NAME>, " et reprendre les MÊMES traits iconiques que basePortraitPrompt, puis ajouter l'expression/posture spécifique à cette émotion)
 
-Choisis les 6 réactions qui révèlent VRAIMENT ce personnage (ex pour Einstein : Eurêka, Pensif, Espiègle, Indigné par la guerre, Émerveillé, Mélancolique ; pour MJ : Moonwalk, Cri aigu, Timide, Dansant, Touché, Concentré sur scène).`;
+Choisis les 6 réactions qui révèlent VRAIMENT ce personnage (ex pour Einstein : Eurêka, Pensif, Espiègle, Indigné par la guerre, Émerveillé, Mélancolique ; pour MJ : Moonwalk, Cri aigu, Timide, Dansant, Touché, Concentré sur scène).
+
+Réponds STRICTEMENT en JSON valide, sans markdown, sans texte autour.`;
 
   const user = `Personnage : ${name}\nÉpoque : ${era}\nContexte fourni par l'utilisateur :\n${userContext}`;
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.8,
-    }),
+  const content = await callLlm({
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    jsonMode: true,
+    temperature: 0.8,
   });
 
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`OpenAI ${res.status}: ${txt.slice(0, 300)}`);
-  }
-  const data = await res.json();
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("Réponse ChatGPT vide.");
-  const parsed = JSON.parse(content) as GptPlan;
+  // Extract JSON object even if model wraps it in prose / markdown
+  let jsonStr = content.trim();
+  const fenced = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) jsonStr = fenced[1].trim();
+  const firstBrace = jsonStr.indexOf("{");
+  const lastBrace = jsonStr.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1) jsonStr = jsonStr.slice(firstBrace, lastBrace + 1);
+
+  const parsed = JSON.parse(jsonStr) as GptPlan;
 
   // Sanitize
   parsed.reactions = (parsed.reactions || []).slice(0, 6).map((r) => ({
@@ -358,9 +415,6 @@ async function pickGradiumVoiceWithGpt(args: {
   userContext: string;
   basePortraitPrompt: string;
 }): Promise<string> {
-  const apiKey = process.env.ChatGPT;
-  if (!apiKey) throw new Error("Clé ChatGPT manquante côté serveur.");
-
   const system = `Tu es directeur de casting vocal pour un TTS français Gradium. À partir d'un personnage historique, choisis LA voix la plus AUTHENTIQUE possible — genre, âge perçu (jeune adulte vs adulte mature), tempérament, gravité, autorité, contexte d'époque. Vise la ressemblance maximale avec ce qu'aurait été la voix réelle du personnage. Réponds STRICTEMENT en JSON : {"voice_id": "<id>"}.`;
   const user = `Personnage : ${args.name}
 Époque : ${args.era}
@@ -374,27 +428,34 @@ Critères :
 1. Genre du personnage en priorité absolue.
 2. Âge perçu cohérent (jeune vs adulte mature/âgé).
 3. Tempérament (autorité, douceur, énergie, gravité) cohérent avec le rôle historique.
-4. Pour figures historiques masculines d'autorité (chefs militaires, monarques, savants âgés), privilégier voix mâles graves/sages (ex. Vincent, Nicolas, Antoine, Adam, Mathieu).`;
+4. Pour figures historiques masculines d'autorité (chefs militaires, monarques, savants âgés), privilégier voix mâles graves/sages (ex. Vincent, Nicolas, Antoine, Adam, Mathieu).
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: "gpt-4o",
+Réponds STRICTEMENT en JSON valide : {"voice_id": "<id>"}.`;
+
+  let content: string;
+  try {
+    content = await callLlm({
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },
       ],
-      response_format: { type: "json_object" },
+      jsonMode: true,
       temperature: 0.3,
-    }),
-  });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`OpenAI voix ${res.status}: ${txt.slice(0, 200)}`);
+    });
+  } catch (err) {
+    console.warn("[voice] LLM KO, voix par défaut:", err);
+    return DEFAULT_GRADIUM_VOICE;
   }
-  const j = await res.json();
-  const parsed = JSON.parse(j.choices?.[0]?.message?.content ?? "{}") as { voice_id?: string };
+
+  let jsonStr = content.trim();
+  const fenced = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) jsonStr = fenced[1].trim();
+  const fb = jsonStr.indexOf("{");
+  const lb = jsonStr.lastIndexOf("}");
+  if (fb !== -1 && lb !== -1) jsonStr = jsonStr.slice(fb, lb + 1);
+
+  let parsed: { voice_id?: string } = {};
+  try { parsed = JSON.parse(jsonStr); } catch { /* ignore */ }
   const valid = GRADIUM_FR_VOICES.some((v) => v.id === parsed.voice_id);
   return valid ? (parsed.voice_id as string) : DEFAULT_GRADIUM_VOICE;
 }
@@ -406,9 +467,6 @@ async function generateSvgAvatar(args: {
   basePortraitPrompt: string;
   accent: string;
 }): Promise<string> {
-  const apiKey = process.env.ChatGPT;
-  if (!apiKey) throw new Error("Clé ChatGPT manquante côté serveur.");
-
   const system = `Tu es un illustrateur SVG cartoon 2D flat (style Duolingo / Bitmoji). Tu produis UNIQUEMENT un SVG brut (commence par <svg ... et finit par </svg>), aucun texte, aucun markdown, aucune balise <html>.
 
 Spec OBLIGATOIRE :
@@ -435,29 +493,19 @@ Identifie 2 à 3 éléments iconiques non-négociables propres à ce personnage 
 
 Retourne UNIQUEMENT le SVG.`;
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      temperature: 0.7,
-    }),
+  let svg = await callLlm({
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    temperature: 0.7,
   });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`OpenAI SVG ${res.status}: ${txt.slice(0, 200)}`);
-  }
-  const j = await res.json();
-  let svg: string = j.choices?.[0]?.message?.content ?? "";
+
   // Strip markdown code fences if present
   svg = svg.replace(/^```(?:svg|xml)?\s*/i, "").replace(/```\s*$/i, "").trim();
   const start = svg.indexOf("<svg");
   const end = svg.lastIndexOf("</svg>");
-  if (start === -1 || end === -1) throw new Error("SVG invalide retourné par ChatGPT.");
+  if (start === -1 || end === -1) throw new Error("SVG invalide retourné par le LLM.");
   return svg.slice(start, end + 6);
 }
 
@@ -686,8 +734,7 @@ const BUILT_IN_CHAT_CHARACTERS: Record<string, BuiltInChat> = {
 export const chatWithCharacter = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => ChatInput.parse(input))
   .handler(async ({ data }) => {
-    const apiKey = process.env.PIONEER_API_KEY;
-    if (!apiKey && !process.env.ChatGPT) {
+    if (!process.env.PIONEER_API_KEY && !process.env.ChatGPT) {
       throw new Error("Aucun LLM configuré côté serveur (PIONEER_API_KEY ni ChatGPT).");
     }
     const lang: "fr" | "en" = data.lang === "en" ? "en" : "fr";
@@ -755,63 +802,17 @@ ${lang === "en" ? `You are ${char.name}.` : `Tu es ${char.name}.`} ${languageDir
 
 ${reactionInstruction}`;
 
-    // Try Pioneer first, fall back to OpenAI (ChatGPT) if it fails
+    // Pioneer (primary) + ChatGPT fallback via shared helper
     const messagesForLlm = [
       { role: "system", content: system },
       ...data.messages,
     ];
 
-    let content: string | undefined;
-    let pioneerError: string | null = null;
-    try {
-      if (!apiKey) throw new Error("Pioneer non configuré");
-      const res = await fetch("https://api.pioneer.ai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: "3143d855-95b1-4da7-afad-d579fcd3d5ed",
-          messages: messagesForLlm,
-          stream: false,
-        }),
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(`Pioneer ${res.status}: ${txt.slice(0, 300)}`);
-      }
-      const json = await res.json();
-      content = json.choices?.[0]?.message?.content;
-      if (!content) throw new Error("Réponse Pioneer vide.");
-    } catch (err) {
-      pioneerError = err instanceof Error ? err.message : "Pioneer indisponible";
-      console.warn("[chat] Pioneer failed, falling back to ChatGPT:", pioneerError);
-      const openaiKey = process.env.ChatGPT;
-      if (!openaiKey) {
-        throw new Error(`Pioneer indisponible et fallback ChatGPT non configuré : ${pioneerError}`);
-      }
-      const res2 = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${openaiKey}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: messagesForLlm,
-          response_format: { type: "json_object" },
-          temperature: 0.8,
-        }),
-      });
-      if (!res2.ok) {
-        const txt = await res2.text();
-        throw new Error(`Pioneer KO (${pioneerError}) + ChatGPT ${res2.status}: ${txt.slice(0, 200)}`);
-      }
-      const json2 = await res2.json();
-      content = json2.choices?.[0]?.message?.content;
-      if (!content) throw new Error(`Pioneer KO (${pioneerError}) + ChatGPT réponse vide.`);
-    }
+    const content = await callLlm({
+      messages: messagesForLlm,
+      jsonMode: true,
+      temperature: 0.8,
+    });
 
     // Extract JSON object even if model wraps it in prose / markdown
     let parsed: { reply?: string; reactionIdx?: number } = {};
@@ -893,58 +894,54 @@ const TranscribeInput = z.object({
 export const transcribeAudio = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => TranscribeInput.parse(input))
   .handler(async ({ data }) => {
-    const apiKey = process.env.Gradium;
-    if (!apiKey) throw new Error("Clé Gradium manquante côté serveur.");
+    const apiKey = process.env.SLNG;
+    if (!apiKey) throw new Error("Clé SLNG manquante côté serveur.");
 
     const cleanMime = data.mime.split(";")[0].trim().toLowerCase();
-    const inputFormatByMime: Record<string, string> = {
-      "audio/wav": "wav",
-      "audio/wave": "wav",
-      "audio/x-wav": "wav",
-      "audio/ogg": "opus",
-      "audio/opus": "opus",
-      "audio/pcm": "pcm",
-    };
-    const inputFormat = inputFormatByMime[cleanMime];
-    if (!inputFormat) {
-      throw new Error(`Format audio non supporté par Gradium STT: ${cleanMime}. Utilisez WAV/PCM ou Ogg Opus.`);
-    }
 
-    // base64 -> bytes
+    // base64 -> bytes (sans charger toute la string en mémoire 2x si évitable)
     const binary = atob(data.audioBase64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-    const cfg = encodeURIComponent(JSON.stringify({ language: "fr", input_format: inputFormat }));
-    const res = await fetch(
-      `https://api.gradium.ai/api/post/speech/asr?json_config=${cfg}&input_format=${inputFormat}`,
-      {
-        method: "POST",
-        headers: {
-          "x-api-key": apiKey,
-          "Content-Type": cleanMime === "audio/wave" || cleanMime === "audio/x-wav" ? "audio/wav" : cleanMime,
-        },
-        body: bytes,
-      },
-    );
+    // Choisir une extension cohérente pour le multipart/form-data
+    const extByMime: Record<string, string> = {
+      "audio/wav": "wav",
+      "audio/wave": "wav",
+      "audio/x-wav": "wav",
+      "audio/ogg": "ogg",
+      "audio/opus": "opus",
+      "audio/webm": "webm",
+      "audio/mpeg": "mp3",
+      "audio/mp3": "mp3",
+      "audio/mp4": "m4a",
+      "audio/x-m4a": "m4a",
+      "audio/flac": "flac",
+      "audio/pcm": "pcm",
+    };
+    const ext = extByMime[cleanMime] ?? "wav";
+
+    const form = new FormData();
+    const blob = new Blob([bytes], { type: cleanMime || "audio/wav" });
+    form.append("audio", blob, `audio.${ext}`);
+    // Nova-3 multi-language : "multi" déclenche la détection auto FR/EN/...
+    form.append("language", "multi");
+
+    // SLNG Unified API — Deepgram Nova-3 multilingue (HTTP)
+    const res = await fetch("https://api.slng.ai/v1/stt/slng/deepgram/nova:3-multi", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: form,
+    });
     if (!res.ok) {
       const txt = await res.text();
-      throw new Error(`Gradium STT ${res.status}: ${txt.slice(0, 300)}`);
+      throw new Error(`SLNG STT ${res.status}: ${txt.slice(0, 300)}`);
     }
 
-    // NDJSON streamed body — accumulate text chunks
-    const raw = await res.text();
-    const lines = raw.split("\n").filter((l) => l.trim().length > 0);
-    let transcript = "";
-    for (const line of lines) {
-      try {
-        const msg = JSON.parse(line) as { type?: string; text?: string };
-        if ((msg.type === "text" || msg.type === "end_text") && typeof msg.text === "string") {
-          transcript += (transcript && !transcript.endsWith(" ") ? " " : "") + msg.text;
-        }
-      } catch {
-        // ignore malformed line
-      }
-    }
-    return { text: transcript.trim() };
+    const json = (await res.json()) as {
+      results?: { channels?: { alternatives?: { transcript?: string }[] }[] };
+    };
+    const transcript =
+      json.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim() ?? "";
+    return { text: transcript };
   });
