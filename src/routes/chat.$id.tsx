@@ -372,7 +372,16 @@ function Chat() {
             onClick={() => setMode(mode === "voice" ? "text" : "voice")}
             active
           />
-          <ActionButton icon={<Film />} label="Scène" onClick={() => send("Imagine une scène : que feriez-vous aujourd'hui ?")} />
+          {mode === "voice" ? (
+            <ActionButton
+              icon={isRecording ? <MicOff /> : isTranscribing ? <Loader2 className="animate-spin" /> : <Mic />}
+              label={isRecording ? "Stop" : isTranscribing ? "Transcrit…" : "Parler"}
+              onClick={toggleMic}
+              active={isRecording}
+            />
+          ) : (
+            <ActionButton icon={<Film />} label="Scène" onClick={() => send("Imagine une scène : que feriez-vous aujourd'hui ?")} />
+          )}
 
           <button
             onClick={() => navigate({ to: "/select" })}
