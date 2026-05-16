@@ -894,58 +894,54 @@ const TranscribeInput = z.object({
 export const transcribeAudio = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => TranscribeInput.parse(input))
   .handler(async ({ data }) => {
-    const apiKey = process.env.Gradium;
-    if (!apiKey) throw new Error("Clé Gradium manquante côté serveur.");
+    const apiKey = process.env.SLNG;
+    if (!apiKey) throw new Error("Clé SLNG manquante côté serveur.");
 
     const cleanMime = data.mime.split(";")[0].trim().toLowerCase();
-    const inputFormatByMime: Record<string, string> = {
-      "audio/wav": "wav",
-      "audio/wave": "wav",
-      "audio/x-wav": "wav",
-      "audio/ogg": "opus",
-      "audio/opus": "opus",
-      "audio/pcm": "pcm",
-    };
-    const inputFormat = inputFormatByMime[cleanMime];
-    if (!inputFormat) {
-      throw new Error(`Format audio non supporté par Gradium STT: ${cleanMime}. Utilisez WAV/PCM ou Ogg Opus.`);
-    }
 
-    // base64 -> bytes
+    // base64 -> bytes (sans charger toute la string en mémoire 2x si évitable)
     const binary = atob(data.audioBase64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-    const cfg = encodeURIComponent(JSON.stringify({ language: "fr", input_format: inputFormat }));
-    const res = await fetch(
-      `https://api.gradium.ai/api/post/speech/asr?json_config=${cfg}&input_format=${inputFormat}`,
-      {
-        method: "POST",
-        headers: {
-          "x-api-key": apiKey,
-          "Content-Type": cleanMime === "audio/wave" || cleanMime === "audio/x-wav" ? "audio/wav" : cleanMime,
-        },
-        body: bytes,
-      },
-    );
+    // Choisir une extension cohérente pour le multipart/form-data
+    const extByMime: Record<string, string> = {
+      "audio/wav": "wav",
+      "audio/wave": "wav",
+      "audio/x-wav": "wav",
+      "audio/ogg": "ogg",
+      "audio/opus": "opus",
+      "audio/webm": "webm",
+      "audio/mpeg": "mp3",
+      "audio/mp3": "mp3",
+      "audio/mp4": "m4a",
+      "audio/x-m4a": "m4a",
+      "audio/flac": "flac",
+      "audio/pcm": "pcm",
+    };
+    const ext = extByMime[cleanMime] ?? "wav";
+
+    const form = new FormData();
+    const blob = new Blob([bytes], { type: cleanMime || "audio/wav" });
+    form.append("audio", blob, `audio.${ext}`);
+    // Nova-3 multi-language : "multi" déclenche la détection auto FR/EN/...
+    form.append("language", "multi");
+
+    // SLNG Unified API — Deepgram Nova-3 multilingue (HTTP)
+    const res = await fetch("https://api.slng.ai/v1/stt/slng/deepgram/nova:3-multi", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: form,
+    });
     if (!res.ok) {
       const txt = await res.text();
-      throw new Error(`Gradium STT ${res.status}: ${txt.slice(0, 300)}`);
+      throw new Error(`SLNG STT ${res.status}: ${txt.slice(0, 300)}`);
     }
 
-    // NDJSON streamed body — accumulate text chunks
-    const raw = await res.text();
-    const lines = raw.split("\n").filter((l) => l.trim().length > 0);
-    let transcript = "";
-    for (const line of lines) {
-      try {
-        const msg = JSON.parse(line) as { type?: string; text?: string };
-        if ((msg.type === "text" || msg.type === "end_text") && typeof msg.text === "string") {
-          transcript += (transcript && !transcript.endsWith(" ") ? " " : "") + msg.text;
-        }
-      } catch {
-        // ignore malformed line
-      }
-    }
-    return { text: transcript.trim() };
+    const json = (await res.json()) as {
+      results?: { channels?: { alternatives?: { transcript?: string }[] }[] };
+    };
+    const transcript =
+      json.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim() ?? "";
+    return { text: transcript };
   });
