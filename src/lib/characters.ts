@@ -22,6 +22,8 @@ export type Character = {
   reactions?: Reaction[];
   svgAvatar?: string | null;
   isCustom?: boolean;
+  /** For enriched built-ins: id of the DB twin used for chat/voice backend calls */
+  twinId?: string;
 };
 
 export const CHARACTERS: Character[] = [
