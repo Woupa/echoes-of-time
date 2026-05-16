@@ -20,6 +20,7 @@ export type Character = {
   greeting: string;
   systemPrompt: string;
   reactions?: Reaction[];
+  svgAvatar?: string | null;
   isCustom?: boolean;
 };
 
