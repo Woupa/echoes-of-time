@@ -92,16 +92,53 @@ Choisis les 6 réactions qui révèlent VRAIMENT ce personnage (ex pour Einstein
   return parsed;
 }
 
-// SLNG Rime Arcana v2 French speakers (catalogue SLNG-hosted)
-const SLNG_FR_SPEAKERS = [
-  { id: "destin", description: "voix masculine grave, posée, autoritaire — figure d'autorité, leader, homme mûr" },
-  { id: "serrin_joseph", description: "voix masculine chaleureuse, narrative, intellectuelle — savant, écrivain, mentor" },
-  { id: "solstice", description: "voix féminine claire, lumineuse, élégante — figure inspirante, artiste, jeune femme" },
-  { id: "livet_aurelie", description: "voix féminine douce, expressive, sensible — confidente, poétesse, héroïne romantique" },
-  { id: "morel_marianne", description: "voix féminine mature, posée, sage — matriarche, conseillère, femme d'expérience" },
+// Gradium French voice catalog (id, name, gender, age, description)
+const GRADIUM_FR_VOICES = [
+  { id: "b35yykvVppLXyw_l", name: "Elise", gender: "F", age: "Adult", desc: "warm smooth female, friendly conversation, welcoming" },
+  { id: "axlOaUiFyOZhy4nv", name: "Leo", gender: "M", age: "Adult", desc: "warm smooth male, friendly conversation, welcoming" },
+  { id: "vMYQUSzm6GRkJX6d", name: "Olivier", gender: "M", age: "Adult", desc: "friendly male, warm welcoming tone" },
+  { id: "p1fSBpcmVWngBqVd", name: "Manon", gender: "F", age: "Young Adult", desc: "gentle warm calm measured female" },
+  { id: "3mM3xaoFjNMQa22C", name: "Jade", gender: "F", age: "Young Adult", desc: "young female, clear high-pitched smooth" },
+  { id: "J4XbCGPYNMigXcfZ", name: "Amelie", gender: "F", age: "Young Adult", desc: "friendly clear pleasant young female" },
+  { id: "0LMAi0x_YVG_GLeM", name: "Adrien", gender: "M", age: "Young Adult", desc: "clear smooth moderately paced warm young male" },
+  { id: "-dOnYAX4N4GqSOee", name: "Sarah", gender: "F", age: "Young Adult", desc: "warm smooth young female, friendly interactions" },
+  { id: "N8xxxD_d-ZinGVI4", name: "Jennifer", gender: "F", age: "Young Adult", desc: "warm smooth young female, support welcoming" },
+  { id: "zba0owtqy4Gnewn9", name: "Elodie", gender: "F", age: "Adult", desc: "confident female, corporate training, compliance" },
+  { id: "TJv-kucMsUo24VQe", name: "Justine", gender: "F", age: "Young Adult", desc: "confident upbeat young female, youth brands" },
+  { id: "YE0-JPiElafJrZaC", name: "Oceane", gender: "F", age: "Young Adult", desc: "polished young female, broadcasting, radio" },
+  { id: "QY_BJKHMElKDO12-", name: "Lea", gender: "F", age: "Adult", desc: "formal female, financial reports, news, authoritative" },
+  { id: "QkmUhBH4hIV2_BkY", name: "Sarah2", gender: "F", age: "Adult", desc: "confident compassionate female, biographies, support" },
+  { id: "D-IpHY1UI0iX9xQD", name: "Mathieu", gender: "M", age: "Adult", desc: "assertive energetic male, high-stakes promos" },
+  { id: "twLGV8mrH_ycNpUn", name: "Clement", gender: "M", age: "Adult", desc: "confident sincere male, credibility, expert topics" },
+  { id: "k1wgs3k8-wRxTJO6", name: "Julie", gender: "F", age: "Adult", desc: "joyful enthusiastic female, news, education" },
+  { id: "Hdf5cdfaGrLDTD63", name: "Dylan", gender: "M", age: "Adult", desc: "sincere emotional male, genuine support, relatable" },
+  { id: "1VAVLmmbQFDw7TMn", name: "Marion", gender: "F", age: "Adult", desc: "warm trustworthy female, storytelling, education" },
+  { id: "2AtP1urAQkZaeI2U", name: "Pauline", gender: "F", age: "Adult", desc: "professional articulate female, serious journalism" },
+  { id: "B09t5S64xLaKwXeW", name: "Vincent", gender: "M", age: "Adult", desc: "warm wise male, historical narration, supportive — strong fit for older historical figures" },
+  { id: "AroCL6f1qizjiZ_a", name: "Pierre", gender: "M", age: "Young Adult", desc: "energetic young male, lively journalistic flair" },
+  { id: "qTA0lxFpynJdoxx7", name: "Guillaume", gender: "M", age: "Young Adult", desc: "joyful adventurous young male, dynamic storytelling" },
+  { id: "zpmn3GOfiU_i5QGo", name: "Romain", gender: "M", age: "Adult", desc: "warm steady male, quick instructions, interviews" },
+  { id: "IB53xJtufx1sbfbt", name: "Kevin", gender: "M", age: "Adult", desc: "sincere emotional male, depth wisdom, narration" },
+  { id: "kw_VWSocR7vyA9Ty", name: "Florian", gender: "M", age: "Adult", desc: "joyful relatable male, friendly journalist" },
+  { id: "hx1RAC4Lqd9xyTAr", name: "Antoine", gender: "M", age: "Adult", desc: "gritty confident male, intense narration, experienced" },
+  { id: "pdcyd1mLmo0fcg3O", name: "Quentin", gender: "M", age: "Adult", desc: "confident sincere male, tech expert" },
+  { id: "aNiSRZ0BhQxO1FPx", name: "Adam", gender: "M", age: "Adult", desc: "warm formal male, calm professional, corporate" },
+  { id: "ImBVnxSeLsdCfNIV", name: "Anais", gender: "F", age: "Young Adult", desc: "distinctive sharp young female, lifestyle" },
+  { id: "GmGF_3ETsY2Zq7_w", name: "Marine", gender: "F", age: "Adult", desc: "warm nurturing female, storytelling, education, empathetic" },
+  { id: "w9V1722uEmTkWqnR", name: "Camille", gender: "F", age: "Adult", desc: "joyful professional female, corporate, journalism" },
+  { id: "BbLb4TxdlrldgpHI", name: "Marie", gender: "F", age: "Adult", desc: "warm professional female, calm instruction, empathetic" },
+  { id: "8nsAoui8Y5RK9PYw", name: "Thomas", gender: "M", age: "Adult", desc: "confident sincere male, drives action, commercials" },
+  { id: "rIYDMY3dLccdauWA", name: "Chloe", gender: "F", age: "Adult", desc: "bright versatile female, friendly assistance, education" },
+  { id: "mxcKXLymdLQCdlEq", name: "Nicolas", gender: "M", age: "Adult", desc: "assertive warm male, strength, character, narration" },
+  { id: "Jlh1B0PKQJyup0sQ", name: "Laura", gender: "F", age: "Adult", desc: "helpful clear female, educational content" },
+  { id: "NvHEAMGiPT4u8iT-", name: "Amandine", gender: "F", age: "Adult", desc: "versatile joyful female, education" },
+  { id: "WWHSNJCSTm77dyGd", name: "Valentin", gender: "M", age: "Adult", desc: "warm lively male, spark genuine enthusiasm" },
+  { id: "L6OaiBybqikfCBk0", name: "Manu", gender: "M", age: "Young Adult", desc: "pleasant low-pitch smooth young male" },
 ] as const;
 
-async function pickSlngSpeakerWithGpt(args: {
+const DEFAULT_GRADIUM_VOICE = "axlOaUiFyOZhy4nv"; // Leo — neutral fallback
+
+async function pickGradiumVoiceWithGpt(args: {
   name: string;
   era: string;
   userContext: string;
@@ -110,26 +147,32 @@ async function pickSlngSpeakerWithGpt(args: {
   const apiKey = process.env.ChatGPT;
   if (!apiKey) throw new Error("Clé ChatGPT manquante côté serveur.");
 
-  const system = `Tu es directeur de casting vocal pour un TTS français (Rime Arcana via SLNG). À partir d'un personnage, choisis LA voix la plus adaptée (genre, âge, tempérament, époque). Réponds STRICTEMENT en JSON : {"speaker": "<id>"}.`;
+  const system = `Tu es directeur de casting vocal pour un TTS français Gradium. À partir d'un personnage historique, choisis LA voix la plus AUTHENTIQUE possible — genre, âge perçu (jeune adulte vs adulte mature), tempérament, gravité, autorité, contexte d'époque. Vise la ressemblance maximale avec ce qu'aurait été la voix réelle du personnage. Réponds STRICTEMENT en JSON : {"voice_id": "<id>"}.`;
   const user = `Personnage : ${args.name}
 Époque : ${args.era}
 Contexte : ${args.userContext}
 Description visuelle : ${args.basePortraitPrompt}
 
-Voix disponibles :
-${SLNG_FR_SPEAKERS.map((v) => `- ${v.id} : ${v.description}`).join("\n")}`;
+Voix françaises disponibles (id | nom | genre | âge | description) :
+${GRADIUM_FR_VOICES.map((v) => `- ${v.id} | ${v.name} | ${v.gender} | ${v.age} | ${v.desc}`).join("\n")}
+
+Critères :
+1. Genre du personnage en priorité absolue.
+2. Âge perçu cohérent (jeune vs adulte mature/âgé).
+3. Tempérament (autorité, douceur, énergie, gravité) cohérent avec le rôle historique.
+4. Pour figures historiques masculines d'autorité (chefs militaires, monarques, savants âgés), privilégier voix mâles graves/sages (ex. Vincent, Nicolas, Antoine, Adam, Mathieu).`;
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },
       ],
       response_format: { type: "json_object" },
-      temperature: 0.4,
+      temperature: 0.3,
     }),
   });
   if (!res.ok) {
@@ -137,9 +180,9 @@ ${SLNG_FR_SPEAKERS.map((v) => `- ${v.id} : ${v.description}`).join("\n")}`;
     throw new Error(`OpenAI voix ${res.status}: ${txt.slice(0, 200)}`);
   }
   const j = await res.json();
-  const parsed = JSON.parse(j.choices?.[0]?.message?.content ?? "{}") as { speaker?: string };
-  const valid = SLNG_FR_SPEAKERS.some((v) => v.id === parsed.speaker);
-  return valid ? (parsed.speaker as string) : "serrin_joseph";
+  const parsed = JSON.parse(j.choices?.[0]?.message?.content ?? "{}") as { voice_id?: string };
+  const valid = GRADIUM_FR_VOICES.some((v) => v.id === parsed.voice_id);
+  return valid ? (parsed.voice_id as string) : DEFAULT_GRADIUM_VOICE;
 }
 
 async function generateSvgAvatar(args: {
@@ -282,8 +325,8 @@ export const generateCharacter = createServerFn({ method: "POST" })
     const characterId = inserted.id as string;
 
     try {
-      // 3) Choix de la voix SLNG (Rime Arcana FR) en parallèle des images
-      const voicesPromise = pickSlngSpeakerWithGpt({
+      // 3) Choix de la voix Gradium FR en parallèle des images (ChatGPT casting)
+      const voicesPromise = pickGradiumVoiceWithGpt({
         name,
         era,
         userContext,
@@ -534,8 +577,8 @@ const SpeakInput = z.object({
 export const synthesizeSpeech = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => SpeakInput.parse(input))
   .handler(async ({ data }) => {
-    const apiKey = process.env.SLNG;
-    if (!apiKey) throw new Error("Clé SLNG manquante côté serveur.");
+    const apiKey = process.env.Gradium;
+    if (!apiKey) throw new Error("Clé Gradium manquante côté serveur.");
 
     const { data: char, error } = await supabaseAdmin
       .from("characters")
@@ -543,25 +586,25 @@ export const synthesizeSpeech = createServerFn({ method: "POST" })
       .eq("id", data.characterId)
       .single();
     if (error || !char) throw new Error(`Personnage introuvable : ${error?.message}`);
-    const stored = (char.voice_id as string | null) ?? "serrin_joseph";
-    const speaker = SLNG_FR_SPEAKERS.some((v) => v.id === stored) ? stored : "serrin_joseph";
+    const stored = (char.voice_id as string | null) ?? DEFAULT_GRADIUM_VOICE;
+    const voiceId = GRADIUM_FR_VOICES.some((v) => v.id === stored) ? stored : DEFAULT_GRADIUM_VOICE;
 
-    const res = await fetch("https://api.slng.ai/v1/tts/slng/rime/arcana:fr", {
+    const res = await fetch("https://api.gradium.ai/api/post/speech/tts", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        "x-api-key": apiKey,
         "Content-Type": "application/json",
-        Accept: "audio/mpeg",
       },
       body: JSON.stringify({
         text: data.text,
-        speaker,
-        config: { encoding: "mp3", sample_rate: 24000 },
+        voice_id: voiceId,
+        output_format: "wav",
+        only_audio: true,
       }),
     });
     if (!res.ok) {
       const txt = await res.text();
-      throw new Error(`SLNG TTS ${res.status}: ${txt.slice(0, 200)}`);
+      throw new Error(`Gradium TTS ${res.status}: ${txt.slice(0, 200)}`);
     }
     const buf = await res.arrayBuffer();
     const bytes = new Uint8Array(buf);
@@ -571,7 +614,7 @@ export const synthesizeSpeech = createServerFn({ method: "POST" })
       binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
     }
     const base64 = btoa(binary);
-    return { audio: base64, mime: "audio/mpeg" };
+    return { audio: base64, mime: "audio/wav" };
   });
 
 const TranscribeInput = z.object({
