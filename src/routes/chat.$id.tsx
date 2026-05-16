@@ -23,6 +23,9 @@ function Chat() {
   const [mode, setMode] = useState<"voice" | "text">("voice");
   const [showHistory, setShowHistory] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
+  const [reactingTick, setReactingTick] = useState(0);
+  const [specialTick, setSpecialTick] = useState(0);
   const [currentReactionIdx, setCurrentReactionIdx] = useState<number>(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -30,6 +33,22 @@ function Chat() {
   const reactions: Reaction[] = useMemo(() => character?.reactions ?? [], [character]);
   const currentReaction = reactions[currentReactionIdx];
   const displayAvatar = currentReaction?.imageUrl ?? character?.avatar ?? "";
+
+  // Easter-egg "special" every 25s while idle
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (!isSpeaking && !isThinking) setSpecialTick((n) => n + 1);
+    }, 25000);
+    return () => clearInterval(t);
+  }, [isSpeaking, isThinking]);
+
+  const avatarState: AvatarState = isThinking
+    ? "thinking"
+    : isSpeaking
+      ? "talking"
+      : mode === "voice" && input.length === 0
+        ? "listening"
+        : "idle";
 
   useEffect(() => {
     if (character && messages.length === 0) {
