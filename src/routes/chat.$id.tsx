@@ -149,10 +149,38 @@ function Chat() {
     }
   };
 
+  const persistMessages = async (newOnes: Message[]) => {
+    if (!user || newOnes.length === 0) return;
+    try {
+      if (!conversationIdRef.current) {
+        const { data, error } = await supabase
+          .from("conversations")
+          .insert({ user_id: user.id, character_id: id, title: character?.name ?? "" })
+          .select("id")
+          .single();
+        if (error || !data) return;
+        conversationIdRef.current = data.id;
+      }
+      const cid = conversationIdRef.current;
+      await supabase.from("messages").insert(
+        newOnes.map((m) => ({
+          conversation_id: cid,
+          user_id: user.id,
+          role: m.role,
+          content: m.content,
+        })),
+      );
+    } catch (err) {
+      console.error("save conversation:", err);
+    }
+  };
+
   const send = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    const nextMessages: Message[] = [...messages, { role: "user", content: trimmed }];
+    bump();
+    const userMsg: Message = { role: "user", content: trimmed };
+    const nextMessages: Message[] = [...messages, userMsg];
     setMessages(nextMessages);
     setInput("");
     setIsThinking(true);
