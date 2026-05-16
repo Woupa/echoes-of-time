@@ -400,3 +400,51 @@ export const getCustomCharacter = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     return row;
   });
+
+const SpeakInput = z.object({
+  characterId: z.string().uuid(),
+  text: z.string().min(1).max(2000),
+});
+
+export const synthesizeSpeech = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => SpeakInput.parse(input))
+  .handler(async ({ data }) => {
+    const apiKey = process.env.Gradium;
+    if (!apiKey) throw new Error("Clé Gradium manquante côté serveur.");
+
+    const { data: char, error } = await supabaseAdmin
+      .from("characters")
+      .select("voice_id")
+      .eq("id", data.characterId)
+      .single();
+    if (error || !char) throw new Error(`Personnage introuvable : ${error?.message}`);
+    const voiceId = (char.voice_id as string | null) ?? "YTpq7expH9539ERJ";
+
+    const res = await fetch("https://api.gradium.ai/api/post/speech/tts", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text: data.text,
+        voice_id: voiceId,
+        output_format: "wav",
+        only_audio: true,
+      }),
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`Gradium TTS ${res.status}: ${txt.slice(0, 200)}`);
+    }
+    const buf = await res.arrayBuffer();
+    // base64 encode
+    const bytes = new Uint8Array(buf);
+    let binary = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    const base64 = btoa(binary);
+    return { audio: base64, mime: "audio/wav" };
+  });
