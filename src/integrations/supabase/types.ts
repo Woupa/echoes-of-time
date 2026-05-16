@@ -27,6 +27,7 @@ export type Database = {
           system_prompt: string
           title: string
           user_context: string
+          voice_id: string | null
         }
         Insert: {
           accent?: string
@@ -40,6 +41,7 @@ export type Database = {
           system_prompt: string
           title?: string
           user_context?: string
+          voice_id?: string | null
         }
         Update: {
           accent?: string
@@ -53,6 +55,7 @@ export type Database = {
           system_prompt?: string
           title?: string
           user_context?: string
+          voice_id?: string | null
         }
         Relationships: []
       }
