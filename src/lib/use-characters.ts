@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useMemo } from "react";
 import {
-  CHARACTERS,
+  CHARACTERS_I18N,
   getCharacter,
   isCustomId,
+  localizeBuiltIn,
   rowToCharacter,
   type Character,
   type CharacterRow,
@@ -12,9 +14,11 @@ import {
   getCustomCharacter,
   listCustomCharacters,
 } from "./character-generation.functions";
+import { useT } from "./i18n";
 
 export function useAllCharacters() {
   const list = useServerFn(listCustomCharacters);
+  const { lang } = useT();
   const q = useQuery({
     queryKey: ["custom-characters"],
     queryFn: async () => {
@@ -25,13 +29,18 @@ export function useAllCharacters() {
   });
 
   const custom = q.data ?? [];
-  const all: Character[] = [...custom, ...CHARACTERS];
+  const builtIns = useMemo(
+    () => CHARACTERS_I18N.map((c) => localizeBuiltIn(c, lang)),
+    [lang],
+  );
+  const all: Character[] = [...custom, ...builtIns];
   return { all, custom, isLoading: q.isLoading };
 }
 
 export function useCharacter(id: string) {
   const fetchOne = useServerFn(getCustomCharacter);
-  const builtIn = getCharacter(id);
+  const { lang } = useT();
+  const builtIn = getCharacter(id, lang);
   const custom = isCustomId(id);
 
   const q = useQuery({
