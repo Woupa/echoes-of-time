@@ -668,8 +668,8 @@ function Chat() {
           <aside className="flex w-full max-w-md flex-col border-l border-border bg-card shadow-cinema">
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <div>
-                <p className="font-display text-xl">Conversation</p>
-                <p className="text-xs text-muted-foreground">avec {character.name}</p>
+                <p className="font-display text-xl">{t("conversation")}</p>
+                <p className="text-xs text-muted-foreground">{t("with")} {character.name}</p>
               </div>
               <button onClick={() => setShowHistory(false)} className="rounded-full p-2 hover:bg-accent">
                 <X className="h-4 w-4" />
@@ -679,7 +679,7 @@ function Chat() {
               {messages.map((m, i) => (
                 <div key={i} className={m.role === "user" ? "ml-auto max-w-[80%]" : "mr-auto max-w-[85%]"}>
                   <p className="mb-1 text-[10px] uppercase tracking-widest text-muted-foreground">
-                    {m.role === "user" ? "Vous" : character.name} {m.saved && "· 📌"}
+                    {m.role === "user" ? t("you") : character.name} {m.saved && "· 📌"}
                   </p>
                   <div
                     className={
