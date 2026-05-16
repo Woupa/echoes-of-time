@@ -36,6 +36,25 @@ function Chat() {
   const [micError, setMicError] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
+  const conversationIdRef = useRef<string | null>(null);
+
+  // Inactivity → retour à l'accueil après 60s
+  const lastActivityRef = useRef(Date.now());
+  const bump = useCallback(() => { lastActivityRef.current = Date.now(); }, []);
+  useEffect(() => {
+    const iv = setInterval(() => {
+      if (Date.now() - lastActivityRef.current > INACTIVITY_MS) {
+        navigate({ to: "/" });
+      }
+    }, 5000);
+    const evts: (keyof WindowEventMap)[] = ["pointerdown", "keydown", "touchstart"];
+    evts.forEach((e) => window.addEventListener(e, bump));
+    return () => {
+      clearInterval(iv);
+      evts.forEach((e) => window.removeEventListener(e, bump));
+    };
+  }, [bump, navigate]);
 
   const reactions: Reaction[] = useMemo(() => character?.reactions ?? [], [character]);
   const currentReaction = reactions[currentReactionIdx];
