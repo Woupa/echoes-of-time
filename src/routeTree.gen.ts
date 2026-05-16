@@ -13,6 +13,7 @@ import { Route as SelectRouteImport } from './routes/select'
 import { Route as CreateRouteImport } from './routes/create'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SharedTokenRouteImport } from './routes/shared.$token'
 import { Route as ChatIdRouteImport } from './routes/chat.$id'
 import { Route as CallIdRouteImport } from './routes/call.$id'
 
@@ -36,6 +37,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SharedTokenRoute = SharedTokenRouteImport.update({
+  id: '/shared/$token',
+  path: '/shared/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChatIdRoute = ChatIdRouteImport.update({
   id: '/chat/$id',
   path: '/chat/$id',
@@ -54,6 +60,7 @@ export interface FileRoutesByFullPath {
   '/select': typeof SelectRoute
   '/call/$id': typeof CallIdRoute
   '/chat/$id': typeof ChatIdRoute
+  '/shared/$token': typeof SharedTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +69,7 @@ export interface FileRoutesByTo {
   '/select': typeof SelectRoute
   '/call/$id': typeof CallIdRoute
   '/chat/$id': typeof ChatIdRoute
+  '/shared/$token': typeof SharedTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,12 +79,27 @@ export interface FileRoutesById {
   '/select': typeof SelectRoute
   '/call/$id': typeof CallIdRoute
   '/chat/$id': typeof ChatIdRoute
+  '/shared/$token': typeof SharedTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/create' | '/select' | '/call/$id' | '/chat/$id'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/create'
+    | '/select'
+    | '/call/$id'
+    | '/chat/$id'
+    | '/shared/$token'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/create' | '/select' | '/call/$id' | '/chat/$id'
+  to:
+    | '/'
+    | '/auth'
+    | '/create'
+    | '/select'
+    | '/call/$id'
+    | '/chat/$id'
+    | '/shared/$token'
   id:
     | '__root__'
     | '/'
@@ -85,6 +108,7 @@ export interface FileRouteTypes {
     | '/select'
     | '/call/$id'
     | '/chat/$id'
+    | '/shared/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -94,6 +118,7 @@ export interface RootRouteChildren {
   SelectRoute: typeof SelectRoute
   CallIdRoute: typeof CallIdRoute
   ChatIdRoute: typeof ChatIdRoute
+  SharedTokenRoute: typeof SharedTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -126,6 +151,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/shared/$token': {
+      id: '/shared/$token'
+      path: '/shared/$token'
+      fullPath: '/shared/$token'
+      preLoaderRoute: typeof SharedTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/chat/$id': {
       id: '/chat/$id'
       path: '/chat/$id'
@@ -150,6 +182,7 @@ const rootRouteChildren: RootRouteChildren = {
   SelectRoute: SelectRoute,
   CallIdRoute: CallIdRoute,
   ChatIdRoute: ChatIdRoute,
+  SharedTokenRoute: SharedTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

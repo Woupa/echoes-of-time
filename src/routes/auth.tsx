@@ -30,13 +30,24 @@ function AuthPage() {
     setLoading(true);
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: { emailRedirectTo: `${window.location.origin}/select` },
         });
         if (error) throw error;
-        setInfo("Vérifiez votre email pour confirmer votre compte.");
+        // Auto-confirm enabled : la session est créée immédiatement
+        if (data.session) {
+          navigate({ to: "/select" });
+        } else {
+          // Tente une connexion directe (cas où la session n'est pas renvoyée)
+          const { error: signinErr } = await supabase.auth.signInWithPassword({ email, password });
+          if (signinErr) {
+            setInfo("Compte créé. Connectez-vous avec votre email et mot de passe.");
+          } else {
+            navigate({ to: "/select" });
+          }
+        }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;

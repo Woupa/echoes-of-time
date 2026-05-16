@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { Mic, MicOff, Keyboard, History, Film, Bookmark, PhoneOff, Send, X, Loader2, Home } from "lucide-react";
+import { Mic, MicOff, Keyboard, History, Film, Bookmark, PhoneOff, Send, X, Loader2, Home, Volume2, VolumeX, Share2, Check } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useCharacter } from "@/lib/use-characters";
@@ -66,11 +66,19 @@ function Chat() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
+  const [muted, setMuted] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("voice_muted") === "1";
+  });
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const lastAudioB64Ref = useRef<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const conversationIdRef = useRef<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
 
   // Inactivity → retour à l'accueil après 60s
   const lastActivityRef = useRef(Date.now());
@@ -130,7 +138,14 @@ function Chat() {
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const recordedSamplesRef = useRef<Float32Array[]>([]);
 
-  if (isLoading) {
+  // Redirect to /auth when not authenticated so conversations can be saved
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate({ to: "/auth" });
+    }
+  }, [authLoading, user, navigate]);
+
+  if (isLoading || authLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-gold" />
@@ -147,7 +162,7 @@ function Chat() {
   }
 
   const playReply = async (text: string) => {
-    if (!isCustom || !text.trim()) return;
+    if (!isCustom || !text.trim() || muted) return;
     try {
       const { audio, mime } = await speak({ data: { characterId: id, text } });
       const url = `data:${mime};base64,${audio}`;
@@ -158,6 +173,60 @@ function Chat() {
       }
     } catch (err) {
       console.error("TTS error:", err);
+    }
+  };
+
+  const toggleMute = () => {
+    setMuted((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("voice_muted", next ? "1" : "0");
+      }
+      if (next && audioRef.current) {
+        audioRef.current.pause();
+      }
+      return next;
+    });
+  };
+
+  const handleShare = async () => {
+    if (!user) {
+      navigate({ to: "/auth" });
+      return;
+    }
+    setSharing(true);
+    try {
+      let cid = conversationIdRef.current;
+      if (!cid) {
+        const { data, error } = await supabase
+          .from("conversations")
+          .insert({ user_id: user.id, character_id: id, title: character?.name ?? "" })
+          .select("id, share_token")
+          .single();
+        if (error || !data) throw error ?? new Error("création conversation échouée");
+        conversationIdRef.current = data.id;
+        setConversationId(data.id);
+      }
+      cid = conversationIdRef.current!;
+      const { data: updated, error: updErr } = await supabase
+        .from("conversations")
+        .update({ is_public: true })
+        .eq("id", cid)
+        .select("share_token")
+        .single();
+      if (updErr || !updated) throw updErr ?? new Error("activation partage échouée");
+      const url = `${window.location.origin}/shared/${updated.share_token}`;
+      setShareUrl(url);
+      try {
+        await navigator.clipboard.writeText(url);
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 2000);
+      } catch { /* clipboard refused */ }
+    } catch (err) {
+      console.error("share error:", err);
+      setMicError(err instanceof Error ? err.message : "Partage impossible");
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -172,6 +241,7 @@ function Chat() {
           .single();
         if (error || !data) return;
         conversationIdRef.current = data.id;
+        setConversationId(data.id);
       }
       const cid = conversationIdRef.current;
       await supabase.from("messages").insert(
@@ -388,22 +458,39 @@ function Chat() {
       )}
 
       {/* Header */}
-      <header className="relative z-10 flex items-center justify-between px-5 pt-6">
-        <div className="flex items-center gap-3">
+      <header className="relative z-10 flex items-center justify-between gap-2 px-5 pt-6">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleMute}
+            aria-label={muted ? "Réactiver la voix" : "Couper la voix"}
+            title={muted ? "Réactiver la voix" : "Couper la voix"}
+            className={`flex h-10 w-10 items-center justify-center rounded-full border backdrop-blur transition-colors ${muted ? "border-destructive/50 bg-destructive/15 text-destructive" : "border-gold/40 bg-card/60 text-gold hover:bg-accent"}`}
+          >
+            {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+          </button>
           <div className="relative">
             <img src={character.avatar} width={44} height={44} alt="" className="h-11 w-11 rounded-full object-cover ring-1 ring-gold/40" />
-            {isSpeaking && (
+            {isSpeaking && !muted && (
               <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-call ring-2 ring-background" />
             )}
           </div>
           <div>
             <p className="font-display text-lg leading-tight">{character.name}</p>
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-              {isSpeaking ? "Parle…" : "En ligne · Pionnier"}
+              {muted ? "Voix coupée" : isSpeaking ? "Parle…" : "En ligne · Pionnier"}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleShare}
+            disabled={sharing}
+            className="flex items-center gap-1.5 rounded-full border border-gold/40 bg-card/60 px-3 py-1.5 text-xs text-gold backdrop-blur hover:bg-accent disabled:opacity-50"
+            aria-label="Partager la conversation"
+          >
+            {sharing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : shareCopied ? <Check className="h-3.5 w-3.5" /> : <Share2 className="h-3.5 w-3.5" />}
+            {shareCopied ? "Copié" : "Partager"}
+          </button>
           <Link
             to="/"
             className="flex items-center gap-1.5 rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs backdrop-blur hover:bg-accent"
@@ -419,6 +506,37 @@ function Chat() {
           </button>
         </div>
       </header>
+
+      {/* Share link toast */}
+      {shareUrl && (
+        <div className="absolute left-1/2 top-20 z-30 -translate-x-1/2 max-w-md rounded-xl border border-gold/40 bg-card/95 px-4 py-3 text-xs shadow-cinema backdrop-blur">
+          <p className="mb-1 font-medium text-gold">Lien de partage {shareCopied && "(copié)"}</p>
+          <div className="flex items-center gap-2">
+            <input
+              readOnly
+              value={shareUrl}
+              onFocus={(e) => e.currentTarget.select()}
+              className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-[11px]"
+            />
+            <button
+              onClick={() => { void navigator.clipboard.writeText(shareUrl).then(() => { setShareCopied(true); setTimeout(() => setShareCopied(false), 1500); }); }}
+              className="rounded-md border border-gold/40 px-2 py-1 text-[11px] text-gold hover:bg-accent"
+            >
+              Copier
+            </button>
+            <button
+              onClick={() => setShareUrl(null)}
+              className="rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent"
+              aria-label="Fermer"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+          <p className="mt-2 text-[10px] text-muted-foreground">
+            Toute personne avec ce lien pourra lire la conversation.
+          </p>
+        </div>
+      )}
 
       {/* Live subtitle of assistant */}
       <main className="relative z-10 flex flex-1 flex-col items-center justify-end px-6 pb-44">
