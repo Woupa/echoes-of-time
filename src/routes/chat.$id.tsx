@@ -19,6 +19,20 @@ export const Route = createFileRoute("/chat/$id")({
 type Message = { role: "user" | "assistant"; content: string; saved?: boolean; reactionIdx?: number };
 
 const RECORDING_SAMPLE_RATE = 24_000;
+const SILENCE_RMS_THRESHOLD = 0.012;
+const SILENCE_TIMEOUT_MS = 3_000;
+
+function detectLang(text: string): "fr" | "en" | null {
+  const t = text.toLowerCase();
+  if (/[àâçéèêëîïôûùüÿñœæ]/.test(t)) return "fr";
+  const frRe = /\b(le|la|les|un|une|des|je|tu|nous|vous|est|c'est|pour|avec|mais|pas|oui|non|bonjour|salut|merci|qui|que|quoi|comment|pourquoi|où|dans|sur|sous|très|bien|aussi|alors|donc|ça|cette|ce|mon|ma|mes|ton|ta|tes|son|sa|ses|nos|vos|leur|leurs|moi|toi|lui|elle|ils|elles)\b/g;
+  const enRe = /\b(the|a|an|i|you|we|they|is|are|was|were|for|with|but|not|yes|no|hello|hi|hey|thanks|thank|who|what|how|why|where|when|in|on|under|about|do|does|did|have|has|can|could|would|should|my|your|his|her|our|their|me|him|us|them)\b/g;
+  const fr = (t.match(frRe) || []).length;
+  const en = (t.match(enRe) || []).length;
+  if (fr > en) return "fr";
+  if (en > fr) return "en";
+  return null;
+}
 
 function encodeWav(samples: Float32Array, sampleRate: number) {
   const buffer = new ArrayBuffer(44 + samples.length * 2);
