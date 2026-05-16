@@ -2,6 +2,8 @@
 
 Application de conversation (texte + vocal) avec des personnages historiques générés par IA. Crée un personnage à partir d'un nom, obtiens un portrait, une voix, une personnalité — puis discute ou appelle-le en temps réel.
 
+🌐 **Site en ligne** : https://history-dialogue-engine.lovable.app/
+
 > Projet Lovable : https://lovable.dev/projects/583e94c6-65f7-4d86-bfaa-b9156c9a9d28
 
 ## Fonctionnalités
