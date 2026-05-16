@@ -117,7 +117,7 @@ function Chat() {
   const playReply = async (text: string) => {
     if (!isCustom || !text.trim()) return;
     try {
-      const { audio, mime } = await speak({ data: { characterId: id, text } });
+      const { audio, mime } = await speak({ data: { characterId: backendId!, text } });
       const url = `data:${mime};base64,${audio}`;
       if (audioRef.current) {
         audioRef.current.pause();
