@@ -89,7 +89,10 @@ function Chat() {
   const chat = useServerFn(chatWithCharacter);
   const speak = useServerFn(synthesizeSpeech);
   const transcribe = useServerFn(transcribeAudio);
-  const isCustom = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  // Backend id: UUID for custom characters; for built-ins, use their DB twin's UUID if available
+  const backendId = UUID_RE.test(id) ? id : (character?.twinId ?? null);
+  const isCustom = !!backendId;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -138,7 +141,7 @@ function Chat() {
       if (isCustom && reactions.length > 0) {
         const history = nextMessages.map((m) => ({ role: m.role, content: m.content }));
         const { reply, reactionIdx } = await chat({
-          data: { characterId: id, messages: history },
+          data: { characterId: backendId!, messages: history },
         });
         setIsThinking(false);
         setCurrentReactionIdx(reactionIdx);
