@@ -228,6 +228,77 @@ export const listCustomCharacters = createServerFn({ method: "GET" })
     return data ?? [];
   });
 
+const ChatInput = z.object({
+  characterId: z.string().uuid(),
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().min(1).max(4000),
+      }),
+    )
+    .min(1)
+    .max(40),
+});
+
+export const chatWithCharacter = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => ChatInput.parse(input))
+  .handler(async ({ data }) => {
+    const apiKey = process.env.ChatGPT;
+    if (!apiKey) throw new Error("Clé ChatGPT manquante côté serveur.");
+
+    const { data: char, error } = await supabaseAdmin
+      .from("characters")
+      .select("name, system_prompt, reactions")
+      .eq("id", data.characterId)
+      .single();
+    if (error || !char) throw new Error(`Personnage introuvable : ${error?.message}`);
+
+    const reactions = (char.reactions as ReactionData[]) ?? [];
+    const reactionList = reactions
+      .map((r, i) => `${i}: ${r.label} (${r.description})`)
+      .join("\n");
+
+    const system = `${char.system_prompt}
+
+Tu es ${char.name}. Réponds toujours en français, dans ton style propre, en 1 à 3 phrases vivantes.
+
+Tu dois aussi CHOISIR la réaction la plus adaptée à TA réponse parmi celles-ci (par index) :
+${reactionList}
+
+Réponds STRICTEMENT en JSON (aucun markdown) au format :
+{"reply": "<ta réplique>", "reactionIdx": <numéro 0-${Math.max(0, reactions.length - 1)}>}`;
+
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: system },
+          ...data.messages,
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.9,
+      }),
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`OpenAI ${res.status}: ${txt.slice(0, 300)}`);
+    }
+    const json = await res.json();
+    const content = json.choices?.[0]?.message?.content;
+    if (!content) throw new Error("Réponse ChatGPT vide.");
+    const parsed = JSON.parse(content) as { reply: string; reactionIdx: number };
+    const idx = Number.isInteger(parsed.reactionIdx)
+      ? Math.max(0, Math.min(reactions.length - 1, parsed.reactionIdx))
+      : 0;
+    return { reply: String(parsed.reply ?? ""), reactionIdx: idx };
+  });
+
 export const getCustomCharacter = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
