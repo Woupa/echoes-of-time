@@ -142,6 +142,68 @@ ${SLNG_FR_SPEAKERS.map((v) => `- ${v.id} : ${v.description}`).join("\n")}`;
   return valid ? (parsed.speaker as string) : "serrin_joseph";
 }
 
+async function generateSvgAvatar(args: {
+  name: string;
+  era: string;
+  userContext: string;
+  basePortraitPrompt: string;
+  accent: string;
+}): Promise<string> {
+  const apiKey = process.env.ChatGPT;
+  if (!apiKey) throw new Error("Clé ChatGPT manquante côté serveur.");
+
+  const system = `Tu es un illustrateur SVG cartoon 2D flat (style Duolingo / Bitmoji). Tu produis UNIQUEMENT un SVG brut (commence par <svg ... et finit par </svg>), aucun texte, aucun markdown, aucune balise <html>.
+
+Spec OBLIGATOIRE :
+- viewBox="0 0 400 400", width="100%", height="100%"
+- xmlns="http://www.w3.org/2000/svg"
+- Style 2D flat, formes géométriques simplifiées, AUCUNE ombre portée, AUCUN dégradé, AUCUN contour stroke (les formes se définissent par contraste de couleur)
+- Fond uni rectangulaire avec couleur cohérente à l'univers du personnage
+- Entre 25 et 60 paths/shapes maximum
+- AU MOINS 2 éléments iconiques non-négociables (signatures visuelles qui rendent le personnage reconnaissable en moins de 2s, même en vignette 60×60)
+- Groupes nommés avec id="" pour permettre l'animation :
+  * id="hair", id="head", id="face", id="eyes", id="eye-left", id="eye-right", id="eyebrows", id="mouth", id="body", id="accessory-1", id="accessory-2"
+- Bouche : représentée par UN path avec id="mouth" et class="mouth-closed" (forme fermée par défaut). Génère AUSSI dans <defs> ou en commentaire une variante non utilisée pour l'ouverture — non, plus simple : juste id="mouth" avec un path simple, l'animation CSS suffira.
+- L'avatar est centré, plan poitrine/épaules visage, occupant ~70% de la hauteur.
+- Couleur accent dominante du personnage : ${args.accent}.
+
+Suis rigoureusement ce briefing en interne (visage, yeux, bouche, cheveux, éléments iconiques, corps, accessoires) puis produis le SVG final. Aucune balise <script>. Aucun <foreignObject>. Aucun <image> externe.`;
+
+  const user = `Personnage : ${args.name}
+Époque : ${args.era}
+Contexte : ${args.userContext}
+Description visuelle de référence : ${args.basePortraitPrompt}
+
+Identifie 2 à 3 éléments iconiques non-négociables propres à ce personnage (ex : bicorne + main dans la veste pour Napoléon ; cheveux blancs ébouriffés + moustache pour Einstein ; gant blanc à paillettes + chapeau noir pour MJ) et intègre-les visiblement.
+
+Retourne UNIQUEMENT le SVG.`;
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      temperature: 0.7,
+    }),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`OpenAI SVG ${res.status}: ${txt.slice(0, 200)}`);
+  }
+  const j = await res.json();
+  let svg: string = j.choices?.[0]?.message?.content ?? "";
+  // Strip markdown code fences if present
+  svg = svg.replace(/^```(?:svg|xml)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  const start = svg.indexOf("<svg");
+  const end = svg.lastIndexOf("</svg>");
+  if (start === -1 || end === -1) throw new Error("SVG invalide retourné par ChatGPT.");
+  return svg.slice(start, end + 6);
+}
+
 async function generateFalImage(prompt: string): Promise<ArrayBuffer> {
   const apiKey = process.env.Fal;
   if (!apiKey) throw new Error("Clé Fal manquante côté serveur.");
