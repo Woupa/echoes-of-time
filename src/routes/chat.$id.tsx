@@ -198,15 +198,16 @@ function Chat() {
     setIsThinking(true);
 
     try {
-      if (isCustom && reactions.length > 0) {
+      if (isCustom || ["napoleon", "einstein", "mjackson"].includes(id)) {
         const history = nextMessages.map((m) => ({ role: m.role, content: m.content }));
         const { reply, reactionIdx } = await chat({
           data: { characterId: id, messages: history },
         });
         setIsThinking(false);
-        setCurrentReactionIdx(reactionIdx);
+        const safeReactionIdx = reactions.length > 0 ? reactionIdx : 0;
+        setCurrentReactionIdx(safeReactionIdx);
         if (/[!?]/.test(reply)) setReactingTick((n) => n + 1);
-        const aMsg: Message = { role: "assistant", content: reply, reactionIdx };
+        const aMsg: Message = { role: "assistant", content: reply, reactionIdx: safeReactionIdx };
         setMessages((m) => [...m, aMsg]);
         void persistMessages([userMsg, aMsg]);
         void playReply(reply);
