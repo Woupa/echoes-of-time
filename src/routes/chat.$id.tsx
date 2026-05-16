@@ -54,6 +54,7 @@ function Chat() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const { character, isLoading } = useCharacter(id);
+  const { t } = useT();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
