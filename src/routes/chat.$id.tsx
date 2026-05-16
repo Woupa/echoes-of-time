@@ -404,10 +404,17 @@ function Chat() {
 
   const startRecording = useCallback(async () => {
     setMicError(null);
+    // Pressing Speak interrupts the assistant
+    if (audioRef.current) {
+      audioRef.current.pause();
+      try { audioRef.current.currentTime = 0; } catch { /* ignore */ }
+    }
+    setIsSpeaking(false);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
       recordedSamplesRef.current = [];
+      lastVoiceAtRef.current = Date.now();
 
       const AudioContextClass = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioContextClass) throw new Error("Enregistrement audio non supporté par ce navigateur");
@@ -415,7 +422,13 @@ function Chat() {
       const source = context.createMediaStreamSource(stream);
       const processor = context.createScriptProcessor(4096, 1, 1);
       processor.onaudioprocess = (event) => {
-        recordedSamplesRef.current.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+        const data = event.inputBuffer.getChannelData(0);
+        recordedSamplesRef.current.push(new Float32Array(data));
+        // Compute RMS to detect voice activity
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+        const rms = Math.sqrt(sum / data.length);
+        if (rms > SILENCE_RMS_THRESHOLD) lastVoiceAtRef.current = Date.now();
       };
       source.connect(processor);
       processor.connect(context.destination);
@@ -423,11 +436,22 @@ function Chat() {
       sourceRef.current = source;
       processorRef.current = processor;
       setIsRecording(true);
+
+      // Auto-stop after 3s of silence (only counts after first voice or grace period)
+      const startedAt = Date.now();
+      silenceTimerRef.current = setInterval(() => {
+        const now = Date.now();
+        // Grace: don't stop in the first second
+        if (now - startedAt < 1000) return;
+        if (now - lastVoiceAtRef.current > SILENCE_TIMEOUT_MS) {
+          void stopPcmRecording();
+        }
+      }, 250);
     } catch (err) {
       setMicError(err instanceof Error ? err.message : "Accès micro refusé");
       setIsRecording(false);
     }
-  }, []);
+  }, [stopPcmRecording]);
 
   useEffect(() => {
     return () => {
