@@ -234,13 +234,10 @@ function Chat() {
     }
   };
 
-  const stopRecording = useCallback(() => {
-    void stopPcmRecording();
-  }, []);
-
   const stopPcmRecording = useCallback(async () => {
     const stream = mediaStreamRef.current;
     const context = audioContextRef.current;
+    const sampleRate = context?.sampleRate ?? RECORDING_SAMPLE_RATE;
     processorRef.current?.disconnect();
     sourceRef.current?.disconnect();
     stream?.getTracks().forEach((t) => t.stop());
@@ -264,7 +261,7 @@ function Chat() {
       offset += chunk.length;
     }
 
-    const blob = encodeWav(samples, RECORDING_SAMPLE_RATE);
+    const blob = encodeWav(samples, sampleRate);
     setIsTranscribing(true);
     try {
       const buf = await blob.arrayBuffer();
@@ -284,7 +281,11 @@ function Chat() {
       setIsTranscribing(false);
       setMicError(err instanceof Error ? err.message : "Transcription échouée");
     }
-  }, [transcribe]);
+  }, [send, transcribe]);
+
+  const stopRecording = useCallback(() => {
+    void stopPcmRecording();
+  }, [stopPcmRecording]);
 
   const startRecording = useCallback(async () => {
     setMicError(null);
@@ -293,7 +294,8 @@ function Chat() {
       mediaStreamRef.current = stream;
       recordedSamplesRef.current = [];
 
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      const AudioContextClass = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) throw new Error("Enregistrement audio non supporté par ce navigateur");
       const context = new AudioContextClass({ sampleRate: RECORDING_SAMPLE_RATE });
       const source = context.createMediaStreamSource(stream);
       const processor = context.createScriptProcessor(4096, 1, 1);
