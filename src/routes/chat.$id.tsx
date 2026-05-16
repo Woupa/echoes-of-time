@@ -236,7 +236,10 @@ function Chat() {
 
         const chunks = recordedChunksRef.current;
         if (chunks.length === 0) return;
-        const blob = new Blob(chunks, { type: mr.mimeType || "audio/webm" });
+        const rawType = mr.mimeType || "audio/webm";
+        // Strip codec parameter — Gradium rejects "audio/webm;codecs=opus".
+        const cleanType = rawType.split(";")[0].trim() || "audio/webm";
+        const blob = new Blob(chunks, { type: cleanType });
         if (blob.size < 800) return; // too short
 
         setIsTranscribing(true);
