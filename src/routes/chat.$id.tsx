@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { Mic, MicOff, Keyboard, History, Film, Bookmark, PhoneOff, Send, X, Loader2, Home } from "lucide-react";
+import { Mic, MicOff, Keyboard, History, Film, Bookmark, PhoneOff, Send, X, Loader2, Home, Volume2, VolumeX, Share2, Check } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useCharacter } from "@/lib/use-characters";
