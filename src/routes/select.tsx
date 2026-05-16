@@ -1,10 +1,12 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Plus, Search, Phone, Sparkles, Trash2 } from "lucide-react";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { Plus, Search, Phone, Sparkles, Trash2, LogIn, LogOut, User } from "lucide-react";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAllCharacters } from "@/lib/use-characters";
 import { deleteCustomCharacter } from "@/lib/character-generation.functions";
+import { useAuth } from "@/lib/use-auth";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/select")({
   component: Select,
