@@ -631,7 +631,14 @@ ${reactionInstruction}`;
     const idx = Number.isInteger(parsed.reactionIdx)
       ? Math.max(0, Math.min(maxIdx, parsed.reactionIdx as number))
       : 0;
-    return { reply, reactionIdx: idx };
+
+    // Generate TTS in the same response when requested (saves a round-trip)
+    if (data.withAudio) {
+      const voiceId = await resolveVoiceId(data.characterId);
+      const tts = await gradiumTtsBase64(voiceId, reply);
+      if (tts) return { reply, reactionIdx: idx, audio: tts.audio, mime: tts.mime };
+    }
+    return { reply, reactionIdx: idx, audio: null as string | null, mime: null as string | null };
   });
 
 export const deleteCustomCharacter = createServerFn({ method: "POST" })
