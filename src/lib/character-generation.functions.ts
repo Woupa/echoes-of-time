@@ -43,13 +43,13 @@ async function callChatGpt(name: string, era: string, userContext: string): Prom
 - accent (couleur hex caractéristique du personnage, ex #c9a84c)
 - greeting (1 phrase d'accueil en français, dans son ton)
 - systemPrompt (instructions de roleplay détaillées en français : style de parole, références personnelles, tics, valeurs, vocabulaire d'époque)
-- basePortraitPrompt (description visuelle EN ANGLAIS pour génération d'image : âge, traits, vêtements, époque, éclairage cinématique sépia, portrait épaules visage centré)
+- basePortraitPrompt (description visuelle EN ANGLAIS. DOIT COMMENCER par "Photorealistic portrait of <FULL NAME>, " puis lister 3-5 traits iconiques NON-NÉGOCIABLES qui rendent la personne immédiatement reconnaissable — coiffure signature, vêtement signature, accessoires signature, âge à l'apogée, contexte historique. Ex pour MJ : "Photorealistic portrait of Michael Jackson in his Bad-era prime, signature single sequined glove, black fedora, curly black hair falling over forehead, pale complexion, red leather jacket". Pour Napoléon : "Photorealistic portrait of Napoleon Bonaparte, bicorne hat worn sideways, dark green colonel uniform of the Chasseurs à cheval, hand tucked in waistcoat, dark hair combed forward")
 - reactions : EXACTEMENT 6 réactions les plus pertinentes pour CE personnage spécifiquement (pas génériques). Chaque réaction :
   - label (français court, ex "Eurêka !", "Moonwalk", "Indignation")
   - emoji (1 emoji)
   - animation (UN parmi : ${ANIMATIONS.join(", ")})
   - description (1 phrase courte décrivant l'émotion)
-  - visualPrompt (EN ANGLAIS, description du portrait montrant cette émotion précise : expression faciale, posture, garde le même style cinématique sépia que basePortraitPrompt)
+  - visualPrompt (EN ANGLAIS. DOIT AUSSI COMMENCER par "Photorealistic portrait of <FULL NAME>, " et reprendre les MÊMES traits iconiques que basePortraitPrompt, puis ajouter l'expression/posture spécifique à cette émotion)
 
 Choisis les 6 réactions qui révèlent VRAIMENT ce personnage (ex pour Einstein : Eurêka, Pensif, Espiègle, Indigné par la guerre, Émerveillé, Mélancolique ; pour MJ : Moonwalk, Cri aigu, Timide, Dansant, Touché, Concentré sur scène).`;
 
@@ -208,7 +208,7 @@ async function generateFalImage(prompt: string): Promise<ArrayBuffer> {
   const apiKey = process.env.Fal;
   if (!apiKey) throw new Error("Clé Fal manquante côté serveur.");
 
-  const res = await fetch("https://fal.run/fal-ai/flux/schnell", {
+  const res = await fetch("https://fal.run/fal-ai/flux-pro/v1.1", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -217,9 +217,10 @@ async function generateFalImage(prompt: string): Promise<ArrayBuffer> {
     body: JSON.stringify({
       prompt,
       image_size: "square_hd",
-      num_inference_steps: 4,
       num_images: 1,
-      enable_safety_checker: true,
+      safety_tolerance: "6",
+      output_format: "jpeg",
+      enable_safety_checker: false,
     }),
   });
 
@@ -292,15 +293,22 @@ export const generateCharacter = createServerFn({ method: "POST" })
         return null;
       });
 
-      // 4) Générer le portrait de base + 6 réactions en parallèle
+      // 4) Générer le portrait de base + 6 réactions en parallèle.
+      // On force le nom en tête au cas où GPT l'aurait omis du prompt visuel.
       const cinematicSuffix =
-        ", sepia cinematic tone, soft warm lighting, shallow depth of field, portrait centered on face and shoulders, photorealistic, film grain";
+        ", sepia cinematic tone, soft warm lighting, shallow depth of field, portrait centered on face and shoulders, hyper detailed photorealistic, film grain, unmistakably recognizable likeness";
+      const ensureName = (p: string) => {
+        const lower = p.toLowerCase();
+        return lower.includes(data.name.toLowerCase())
+          ? p
+          : `Photorealistic portrait of ${data.name}, ${p}`;
+      };
 
       const tasks = [
-        { key: "base", prompt: plan.basePortraitPrompt + cinematicSuffix },
+        { key: "base", prompt: ensureName(plan.basePortraitPrompt) + cinematicSuffix },
         ...plan.reactions.map((r, i) => ({
           key: `reaction-${i}`,
-          prompt: r.visualPrompt + cinematicSuffix,
+          prompt: ensureName(r.visualPrompt) + cinematicSuffix,
         })),
       ];
 
