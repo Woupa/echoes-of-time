@@ -678,54 +678,11 @@ const SpeakInput = z.object({
 export const synthesizeSpeech = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => SpeakInput.parse(input))
   .handler(async ({ data }) => {
-    const apiKey = process.env.Gradium;
-    if (!apiKey) throw new Error("Clé Gradium manquante côté serveur.");
-
-    // Built-in voice presets for non-UUID character ids
-    const BUILTIN_VOICES: Record<string, string> = {
-      napoleon: DEFAULT_GRADIUM_VOICE,
-      einstein: DEFAULT_GRADIUM_VOICE,
-      mjackson: DEFAULT_GRADIUM_VOICE,
-    };
-
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.characterId);
-    let voiceId = BUILTIN_VOICES[data.characterId] ?? DEFAULT_GRADIUM_VOICE;
-    if (isUuid) {
-      const { data: char } = await supabaseAdmin
-        .from("characters")
-        .select("voice_id")
-        .eq("id", data.characterId)
-        .single();
-      const stored = (char?.voice_id as string | null) ?? DEFAULT_GRADIUM_VOICE;
-      voiceId = GRADIUM_FR_VOICES.some((v) => v.id === stored) ? stored : DEFAULT_GRADIUM_VOICE;
-    }
-
-    const res = await fetch("https://api.gradium.ai/api/post/speech/tts", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        text: data.text,
-        voice_id: voiceId,
-        output_format: "wav",
-        only_audio: true,
-      }),
-    });
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`Gradium TTS ${res.status}: ${txt.slice(0, 200)}`);
-    }
-    const buf = await res.arrayBuffer();
-    const bytes = new Uint8Array(buf);
-    let binary = "";
-    const chunk = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunk) {
-      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-    }
-    const base64 = btoa(binary);
-    return { audio: base64, mime: "audio/wav" };
+    if (!process.env.Gradium) throw new Error("Clé Gradium manquante côté serveur.");
+    const voiceId = await resolveVoiceId(data.characterId);
+    const tts = await gradiumTtsBase64(voiceId, data.text);
+    if (!tts) throw new Error("Gradium TTS indisponible.");
+    return tts;
   });
 
 const TranscribeInput = z.object({
