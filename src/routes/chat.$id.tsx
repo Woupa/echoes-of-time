@@ -64,7 +64,24 @@ function Chat() {
   }
 
   const chat = useServerFn(chatWithCharacter);
+  const speak = useServerFn(synthesizeSpeech);
   const isCustom = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const playReply = async (text: string) => {
+    if (!isCustom || !text.trim()) return;
+    try {
+      const { audio, mime } = await speak({ data: { characterId: id, text } });
+      const url = `data:${mime};base64,${audio}`;
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = url;
+        await audioRef.current.play().catch(() => {});
+      }
+    } catch (err) {
+      console.error("TTS error:", err);
+    }
+  };
 
   const send = async (text: string) => {
     const trimmed = text.trim();
