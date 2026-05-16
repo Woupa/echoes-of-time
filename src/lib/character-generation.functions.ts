@@ -63,6 +63,7 @@ async function callLlm(opts: {
       messages: opts.messages,
       ...(opts.jsonMode ? { response_format: { type: "json_object" } } : {}),
       temperature: opts.temperature ?? 0.7,
+      max_tokens: 4096,
     }),
   });
   if (!res.ok) {
