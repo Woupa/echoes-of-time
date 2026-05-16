@@ -116,9 +116,13 @@ function Chat() {
     if (character && messages.length === 0) {
       setMessages([{ role: "assistant", content: character.greeting, reactionIdx: 0 }]);
       setIsSpeaking(true);
+      // Fire greeting audio asap (synthesizeSpeech is called once character is known)
+      // playReply is defined below; we use a microtask to ensure refs are wired
+      queueMicrotask(() => { void playReply(character.greeting); });
       const t = setTimeout(() => setIsSpeaking(false), 2400);
       return () => clearTimeout(t);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [character, messages.length]);
 
   useEffect(() => {
