@@ -320,6 +320,10 @@ function Chat() {
   };
 
   const stopPcmRecording = useCallback(async () => {
+    if (silenceTimerRef.current) {
+      clearInterval(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
     const stream = mediaStreamRef.current;
     const context = audioContextRef.current;
     const sampleRate = context?.sampleRate ?? RECORDING_SAMPLE_RATE;
