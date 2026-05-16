@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { Phone, PhoneOff } from "lucide-react";
+import { Phone, PhoneOff, ArrowLeft } from "lucide-react";
 import { getCharacter } from "@/lib/characters";
 
 export const Route = createFileRoute("/call/$id")({
