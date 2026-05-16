@@ -72,7 +72,7 @@ function Select() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Rechercher un personnage…"
+          placeholder={t("search_placeholder")}
           className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
         />
       </div>
