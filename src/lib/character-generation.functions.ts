@@ -240,7 +240,23 @@ export const generateCharacter = createServerFn({ method: "POST" })
     const characterId = inserted.id as string;
 
     try {
-      // 3) Générer le portrait de base + 6 réactions en parallèle
+      // 3) Choix de la voix Gradium en parallèle des images
+      const voicesPromise = listGradiumVoices()
+        .then((voices) =>
+          pickVoiceWithGpt({
+            name,
+            era,
+            userContext,
+            basePortraitPrompt: plan.basePortraitPrompt,
+            voices,
+          }),
+        )
+        .catch((err) => {
+          console.error("Voice pick failed:", err);
+          return null;
+        });
+
+      // 4) Générer le portrait de base + 6 réactions en parallèle
       const cinematicSuffix =
         ", sepia cinematic tone, soft warm lighting, shallow depth of field, portrait centered on face and shoulders, photorealistic, film grain";
 
@@ -268,12 +284,15 @@ export const generateCharacter = createServerFn({ method: "POST" })
         imageUrl: reactionUrls[i],
       }));
 
-      // 4) Update record
+      const voiceId = await voicesPromise;
+
+      // 5) Update record
       const { error: updateErr } = await supabaseAdmin
         .from("characters")
         .update({
           base_avatar_url: baseUrl,
           reactions: reactionsData,
+          voice_id: voiceId,
         })
         .eq("id", characterId);
       if (updateErr) throw new Error(`DB update : ${updateErr.message}`);
