@@ -138,6 +138,62 @@ const GRADIUM_FR_VOICES = [
 
 const DEFAULT_GRADIUM_VOICE = "axlOaUiFyOZhy4nv"; // Leo — neutral fallback
 
+// Distinct voices for built-in characters (picked to match each persona)
+const BUILTIN_VOICES: Record<string, string> = {
+  napoleon: "B09t5S64xLaKwXeW", // Vincent — warm wise male, historical narration, authoritative
+  einstein: "IB53xJtufx1sbfbt", // Kevin — sincere emotional male, depth and wisdom
+  mjackson: "L6OaiBybqikfCBk0", // Manu — pleasant low-pitch smooth young male
+};
+
+// Strip stage-direction brackets like [voix grave], [rires], [pause] before TTS
+function stripStageDirections(text: string): string {
+  return text.replace(/\[[^\]]{1,40}\]/g, "").replace(/\s{2,}/g, " ").trim();
+}
+
+async function resolveVoiceId(characterId: string): Promise<string> {
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(characterId);
+  if (isUuid) {
+    const { data: char } = await supabaseAdmin
+      .from("characters")
+      .select("voice_id")
+      .eq("id", characterId)
+      .single();
+    const stored = (char?.voice_id as string | null) ?? DEFAULT_GRADIUM_VOICE;
+    return GRADIUM_FR_VOICES.some((v) => v.id === stored) ? stored : DEFAULT_GRADIUM_VOICE;
+  }
+  return BUILTIN_VOICES[characterId] ?? DEFAULT_GRADIUM_VOICE;
+}
+
+async function gradiumTtsBase64(voiceId: string, rawText: string): Promise<{ audio: string; mime: string } | null> {
+  const apiKey = process.env.Gradium;
+  if (!apiKey) return null;
+  const text = stripStageDirections(rawText);
+  if (!text) return null;
+  try {
+    const res = await fetch("https://api.gradium.ai/api/post/speech/tts", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        voice_id: voiceId,
+        output_format: "wav",
+        only_audio: true,
+      }),
+    });
+    if (!res.ok) return null;
+    const buf = await res.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let binary = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    return { audio: btoa(binary), mime: "audio/wav" };
+  } catch {
+    return null;
+  }
+}
+
 async function pickGradiumVoiceWithGpt(args: {
   name: string;
   era: string;
