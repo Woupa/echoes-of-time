@@ -174,6 +174,86 @@ function Chat() {
     }
   };
 
+  const stopRecording = useCallback(() => {
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== "inactive") mr.stop();
+  }, []);
+
+  const startRecording = useCallback(async () => {
+    setMicError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      recordedChunksRef.current = [];
+
+      const mimeCandidates = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+        "audio/ogg;codecs=opus",
+      ];
+      const supported = mimeCandidates.find((m) =>
+        typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported?.(m),
+      );
+      const mr = new MediaRecorder(stream, supported ? { mimeType: supported } : undefined);
+      mediaRecorderRef.current = mr;
+
+      mr.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
+      };
+      mr.onstop = async () => {
+        const tracks = mediaStreamRef.current?.getTracks() ?? [];
+        tracks.forEach((t) => t.stop());
+        mediaStreamRef.current = null;
+        setIsRecording(false);
+
+        const chunks = recordedChunksRef.current;
+        if (chunks.length === 0) return;
+        const blob = new Blob(chunks, { type: mr.mimeType || "audio/webm" });
+        if (blob.size < 800) return; // too short
+
+        setIsTranscribing(true);
+        try {
+          const buf = await blob.arrayBuffer();
+          const bytes = new Uint8Array(buf);
+          let bin = "";
+          const CH = 0x8000;
+          for (let i = 0; i < bytes.length; i += CH) {
+            bin += String.fromCharCode(...bytes.subarray(i, i + CH));
+          }
+          const b64 = btoa(bin);
+          const { text } = await transcribe({
+            data: { audioBase64: b64, mime: blob.type || "audio/webm" },
+          });
+          setIsTranscribing(false);
+          if (text) await send(text);
+        } catch (err) {
+          setIsTranscribing(false);
+          setMicError(err instanceof Error ? err.message : "Transcription échouée");
+        }
+      };
+
+      mr.start();
+      setIsRecording(true);
+    } catch (err) {
+      setMicError(err instanceof Error ? err.message : "Accès micro refusé");
+      setIsRecording(false);
+    }
+  }, [transcribe]);
+
+  useEffect(() => {
+    return () => {
+      const mr = mediaRecorderRef.current;
+      if (mr && mr.state !== "inactive") mr.stop();
+      mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  const toggleMic = () => {
+    if (isRecording) stopRecording();
+    else void startRecording();
+  };
+
   const last = messages[messages.length - 1];
 
   return (
