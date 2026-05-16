@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useCharacter } from "@/lib/use-characters";
 import { chatWithCharacter, synthesizeSpeech } from "@/lib/character-generation.functions";
 import type { Reaction } from "@/lib/characters";
+import { AvatarSvg, type AvatarState } from "@/components/AvatarSvg";
 
 export const Route = createFileRoute("/chat/$id")({
   component: Chat,
