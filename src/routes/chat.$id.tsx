@@ -147,6 +147,8 @@ function Chat() {
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const recordedSamplesRef = useRef<Float32Array[]>([]);
+  const lastVoiceAtRef = useRef<number>(0);
+  const silenceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Redirect to /auth when not authenticated so conversations can be saved
   useEffect(() => {
