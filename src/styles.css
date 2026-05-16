@@ -55,15 +55,6 @@
   --gold: oklch(0.82 0.15 80);
   --call: oklch(0.7 0.18 145);
   --hangup: oklch(0.6 0.22 25);
-
-  /* Character palettes */
-  --napoleon-blue: oklch(0.28 0.06 260);
-  --napoleon-red: oklch(0.55 0.2 25);
-  --einstein-white: oklch(0.96 0.01 80);
-  --einstein-gray: oklch(0.55 0.01 60);
-  --mj-black: oklch(0.18 0.01 60);
-  --mj-silver: oklch(0.85 0.02 80);
-  --mj-white: oklch(0.98 0.005 80);
 }
 
 @layer base {
@@ -122,40 +113,3 @@
   80% { transform: rotate(6deg); }
 }
 .animate-shake { animation: shake 0.6s ease-in-out infinite; }
-
-@keyframes avatar-idle {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-2px) scale(1.01); }
-}
-.animate-avatar-idle { animation: avatar-idle 4s ease-in-out infinite; }
-
-@keyframes avatar-talk {
-  0%, 100% { transform: translateY(0) rotate(0); }
-  25% { transform: translateY(-3px) rotate(-1deg); }
-  75% { transform: translateY(-2px) rotate(1deg); }
-}
-.animate-avatar-talk { animation: avatar-talk 0.55s ease-in-out infinite; }
-
-@keyframes avatar-think {
-  0%, 100% { transform: rotate(-2deg); }
-  50% { transform: rotate(2deg); }
-}
-.animate-avatar-think { animation: avatar-think 2.2s ease-in-out infinite; }
-
-@keyframes mouth-talk {
-  0%, 100% { transform: scaleY(1); }
-  50% { transform: scaleY(0.4); }
-}
-.animate-mouth-talk { transform-box: fill-box; transform-origin: center; animation: mouth-talk 0.28s ease-in-out infinite; }
-
-@keyframes eureka {
-  0%, 100% { transform: translateY(0) rotate(0); }
-  50% { transform: translateY(-6px) rotate(8deg); }
-}
-.animate-eureka { transform-box: fill-box; transform-origin: 50% 100%; animation: eureka 0.9s ease-in-out infinite; }
-
-@keyframes moonwalk {
-  0%, 90%, 100% { transform: translateX(0); }
-  45% { transform: translateX(-8px); }
-}
-.animate-moonwalk { animation: moonwalk 6s ease-in-out infinite; }

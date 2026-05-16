@@ -1,9 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { Mic, Keyboard, History, Film, Bookmark, PhoneOff, Send, X, Video, VideoOff } from "lucide-react";
+import { Mic, Keyboard, History, Film, Bookmark, PhoneOff, Send, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { getCharacter } from "@/lib/characters";
-import { useAvatarState } from "@/hooks/useAvatarState";
-import { CharacterAvatar2D } from "@/components/CharacterAvatar2D";
 
 export const Route = createFileRoute("/chat/$id")({
   component: Chat,
@@ -19,10 +17,8 @@ function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [mode, setMode] = useState<"voice" | "text">("voice");
-  const [videoOn, setVideoOn] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -43,13 +39,6 @@ function Chat() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
-  const lastAssistantText = [...messages].reverse().find((m) => m.role === "assistant")?.content;
-  const avatarState = useAvatarState({
-    isStreaming: isSpeaking,
-    isLoading,
-    lastAssistantText,
-  });
-
   if (!character) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -63,47 +52,33 @@ function Chat() {
     if (!trimmed) return;
     setMessages((m) => [...m, { role: "user", content: trimmed }]);
     setInput("");
-    setIsLoading(true);
 
     // TODO: branche ici l'appel API (Sonnet via Vercel)
     // const res = await fetch("/api/chat", { method: "POST", body: JSON.stringify({ characterId: id, messages: [...messages, { role: "user", content: trimmed }] }) });
+    setIsSpeaking(true);
     setTimeout(() => {
-      setIsLoading(false);
-      setIsSpeaking(true);
       setMessages((m) => [
         ...m,
         { role: "assistant", content: `(${character.name} réfléchit…) — Connectez votre clé API Sonnet pour activer la réponse complète.` },
       ]);
-      setTimeout(() => setIsSpeaking(false), 1800);
-    }, 1200);
+      setIsSpeaking(false);
+    }, 1400);
   };
 
   const last = messages[messages.length - 1];
 
   return (
     <div className="vignette relative flex min-h-screen flex-col overflow-hidden bg-background">
-      {/* Background */}
-      {!videoOn && (
-        <>
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage: `url(${character.avatar})`,
-              backgroundSize: "cover",
-              backgroundPosition: "center top",
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/60 to-background" />
-        </>
-      )}
-      {videoOn && (
-        <div
-          className="absolute inset-0"
-          style={{
-            background: `radial-gradient(ellipse at top, color-mix(in oklab, ${character.accent} 18%, var(--background)) 0%, var(--background) 70%)`,
-          }}
-        />
-      )}
+      {/* Avatar background */}
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: `url(${character.avatar})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center top",
+        }}
+      />
+      <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/60 to-background" />
 
       {/* Header */}
       <header className="relative z-10 flex items-center justify-between px-5 pt-6">
@@ -117,7 +92,7 @@ function Chat() {
           <div>
             <p className="font-display text-lg leading-tight">{character.name}</p>
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-              {isSpeaking ? "Parle…" : isLoading ? "Réfléchit…" : "En ligne · Pionnier"}
+              {isSpeaking ? "Parle…" : "En ligne · Pionnier"}
             </p>
           </div>
         </div>
@@ -129,44 +104,14 @@ function Chat() {
         </button>
       </header>
 
-      {/* Full avatar (video mode) */}
-      {videoOn && (
-        <div className="relative z-10 mx-auto flex w-full max-w-md flex-1 items-center justify-center px-6">
-          <div className="h-[60vh] w-full">
-            <CharacterAvatar2D character={character} state={avatarState} size="full" />
-          </div>
-        </div>
-      )}
-
-      {/* Subtitle overlay */}
-      <main
-        className={
-          videoOn
-            ? "relative z-10 mx-auto w-full max-w-xl px-6 pb-44 text-center"
-            : "relative z-10 flex flex-1 flex-col items-center justify-end px-6 pb-44"
-        }
-      >
+      {/* Live subtitle of assistant */}
+      <main className="relative z-10 flex flex-1 flex-col items-center justify-end px-6 pb-44">
         {last?.role === "assistant" && (
-          <div
-            key={messages.length}
-            className={
-              videoOn
-                ? "animate-fade-up mx-auto rounded-2xl border border-border bg-card/70 px-5 py-3 backdrop-blur"
-                : "animate-fade-up max-w-xl text-center"
-            }
-          >
-            <p
-              className={
-                videoOn
-                  ? "font-display text-lg leading-snug text-foreground"
-                  : "font-display text-2xl leading-snug text-foreground drop-shadow-lg md:text-3xl"
-              }
-            >
+          <div key={messages.length} className="animate-fade-up max-w-xl text-center">
+            <p className="font-display text-2xl leading-snug text-foreground drop-shadow-lg md:text-3xl">
               « {last.content} »
             </p>
-            {!videoOn && (
-              <p className="mt-3 text-xs uppercase tracking-[0.3em] text-gold/80">— {character.name}</p>
-            )}
+            <p className="mt-3 text-xs uppercase tracking-[0.3em] text-gold/80">— {character.name}</p>
           </div>
         )}
         {last?.role === "user" && (
@@ -176,15 +121,6 @@ function Chat() {
           </div>
         )}
       </main>
-
-      {/* PiP avatar when video is off */}
-      {!videoOn && (
-        <div className="absolute right-4 top-20 z-20 h-24 w-24 rounded-full border-2 shadow-cinema md:right-6 md:top-24 md:h-28 md:w-28"
-          style={{ borderColor: character.accent }}
-        >
-          <CharacterAvatar2D character={character} state={avatarState} size="pip" />
-        </div>
-      )}
 
       {/* Text input overlay */}
       {mode === "text" && (
@@ -213,7 +149,7 @@ function Chat() {
 
       {/* Action bar */}
       <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-background via-background/95 to-transparent pb-8 pt-12">
-        <div className="mx-auto flex max-w-md items-center justify-around px-4">
+        <div className="mx-auto flex max-w-md items-center justify-around px-6">
           <ActionButton
             icon={mode === "voice" ? <Mic /> : <Keyboard />}
             label={mode === "voice" ? "Vocal" : "Clavier"}
@@ -231,14 +167,8 @@ function Chat() {
           </button>
 
           <ActionButton
-            icon={videoOn ? <Video /> : <VideoOff />}
-            label={videoOn ? "Vidéo" : "Vidéo off"}
-            onClick={() => setVideoOn((v) => !v)}
-            active={videoOn}
-          />
-          <ActionButton
             icon={<Bookmark />}
-            label="Mémo"
+            label="Mémoriser"
             onClick={() => {
               setMessages((m) => m.map((msg, i) => i === m.length - 1 ? { ...msg, saved: true } : msg));
             }}
