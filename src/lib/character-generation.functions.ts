@@ -415,9 +415,6 @@ async function pickGradiumVoiceWithGpt(args: {
   userContext: string;
   basePortraitPrompt: string;
 }): Promise<string> {
-  const apiKey = process.env.ChatGPT;
-  if (!apiKey) throw new Error("Clé ChatGPT manquante côté serveur.");
-
   const system = `Tu es directeur de casting vocal pour un TTS français Gradium. À partir d'un personnage historique, choisis LA voix la plus AUTHENTIQUE possible — genre, âge perçu (jeune adulte vs adulte mature), tempérament, gravité, autorité, contexte d'époque. Vise la ressemblance maximale avec ce qu'aurait été la voix réelle du personnage. Réponds STRICTEMENT en JSON : {"voice_id": "<id>"}.`;
   const user = `Personnage : ${args.name}
 Époque : ${args.era}
@@ -431,27 +428,34 @@ Critères :
 1. Genre du personnage en priorité absolue.
 2. Âge perçu cohérent (jeune vs adulte mature/âgé).
 3. Tempérament (autorité, douceur, énergie, gravité) cohérent avec le rôle historique.
-4. Pour figures historiques masculines d'autorité (chefs militaires, monarques, savants âgés), privilégier voix mâles graves/sages (ex. Vincent, Nicolas, Antoine, Adam, Mathieu).`;
+4. Pour figures historiques masculines d'autorité (chefs militaires, monarques, savants âgés), privilégier voix mâles graves/sages (ex. Vincent, Nicolas, Antoine, Adam, Mathieu).
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: "gpt-4o",
+Réponds STRICTEMENT en JSON valide : {"voice_id": "<id>"}.`;
+
+  let content: string;
+  try {
+    content = await callLlm({
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },
       ],
-      response_format: { type: "json_object" },
+      jsonMode: true,
       temperature: 0.3,
-    }),
-  });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`OpenAI voix ${res.status}: ${txt.slice(0, 200)}`);
+    });
+  } catch (err) {
+    console.warn("[voice] LLM KO, voix par défaut:", err);
+    return DEFAULT_GRADIUM_VOICE;
   }
-  const j = await res.json();
-  const parsed = JSON.parse(j.choices?.[0]?.message?.content ?? "{}") as { voice_id?: string };
+
+  let jsonStr = content.trim();
+  const fenced = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) jsonStr = fenced[1].trim();
+  const fb = jsonStr.indexOf("{");
+  const lb = jsonStr.lastIndexOf("}");
+  if (fb !== -1 && lb !== -1) jsonStr = jsonStr.slice(fb, lb + 1);
+
+  let parsed: { voice_id?: string } = {};
+  try { parsed = JSON.parse(jsonStr); } catch { /* ignore */ }
   const valid = GRADIUM_FR_VOICES.some((v) => v.id === parsed.voice_id);
   return valid ? (parsed.voice_id as string) : DEFAULT_GRADIUM_VOICE;
 }
