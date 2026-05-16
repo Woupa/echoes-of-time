@@ -392,8 +392,8 @@ const ChatInput = z.object({
 export const chatWithCharacter = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => ChatInput.parse(input))
   .handler(async ({ data }) => {
-    const apiKey = process.env.ChatGPT;
-    if (!apiKey) throw new Error("Clé ChatGPT manquante côté serveur.");
+    const apiKey = process.env.PIONEER_API_KEY;
+    if (!apiKey) throw new Error("Clé Pioneer manquante côté serveur.");
 
     const { data: char, error } = await supabaseAdmin
       .from("characters")
@@ -407,6 +407,7 @@ export const chatWithCharacter = createServerFn({ method: "POST" })
       .map((r, i) => `${i}: ${r.label} (${r.description})`)
       .join("\n");
 
+    const maxIdx = Math.max(0, reactions.length - 1);
     const system = `${char.system_prompt}
 
 Tu es ${char.name}. Réponds toujours en français, dans ton style propre, en 1 à 3 phrases vivantes.
@@ -414,37 +415,49 @@ Tu es ${char.name}. Réponds toujours en français, dans ton style propre, en 1 
 Tu dois aussi CHOISIR la réaction la plus adaptée à TA réponse parmi celles-ci (par index) :
 ${reactionList}
 
-Réponds STRICTEMENT en JSON (aucun markdown) au format :
-{"reply": "<ta réplique>", "reactionIdx": <numéro 0-${Math.max(0, reactions.length - 1)}>}`;
+Réponds STRICTEMENT en JSON valide, sans markdown, sans texte autour, au format exact :
+{"reply": "<ta réplique>", "reactionIdx": <numéro 0-${maxIdx}>}`;
 
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    const res = await fetch("https://api.pioneer.ai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "3143d855-95b1-4da7-afad-d579fcd3d5ed",
         messages: [
           { role: "system", content: system },
           ...data.messages,
         ],
-        response_format: { type: "json_object" },
-        temperature: 0.9,
+        stream: false,
       }),
     });
     if (!res.ok) {
       const txt = await res.text();
-      throw new Error(`OpenAI ${res.status}: ${txt.slice(0, 300)}`);
+      throw new Error(`Pioneer ${res.status}: ${txt.slice(0, 300)}`);
     }
     const json = await res.json();
-    const content = json.choices?.[0]?.message?.content;
-    if (!content) throw new Error("Réponse ChatGPT vide.");
-    const parsed = JSON.parse(content) as { reply: string; reactionIdx: number };
+    const content: string | undefined = json.choices?.[0]?.message?.content;
+    if (!content) throw new Error("Réponse Pioneer vide.");
+
+    // Extract JSON object even if model wraps it in prose / markdown
+    let parsed: { reply?: string; reactionIdx?: number } = {};
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      const match = content.match(/\{[\s\S]*\}/);
+      if (match) {
+        try { parsed = JSON.parse(match[0]); } catch { /* ignore */ }
+      }
+    }
+    const reply = typeof parsed.reply === "string" && parsed.reply.trim().length > 0
+      ? parsed.reply
+      : content.trim();
     const idx = Number.isInteger(parsed.reactionIdx)
-      ? Math.max(0, Math.min(reactions.length - 1, parsed.reactionIdx))
+      ? Math.max(0, Math.min(maxIdx, parsed.reactionIdx as number))
       : 0;
-    return { reply: String(parsed.reply ?? ""), reactionIdx: idx };
+    return { reply, reactionIdx: idx };
   });
 
 export const deleteCustomCharacter = createServerFn({ method: "POST" })
