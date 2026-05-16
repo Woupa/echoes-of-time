@@ -156,7 +156,18 @@ function Chat() {
     }
   };
 
-  const toggleMute = () => {
+  // Greeting: insert intro + play audio once character is loaded
+  useEffect(() => {
+    if (!character || greetedRef.current) return;
+    greetedRef.current = true;
+    setMessages([{ role: "assistant", content: character.greeting, reactionIdx: 0 }]);
+    setIsSpeaking(true);
+    void playReply(character.greeting);
+    const tm = setTimeout(() => setIsSpeaking(false), 2400);
+    return () => clearTimeout(tm);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [character?.id]);
+
     setMuted((prev) => {
       const next = !prev;
       if (typeof window !== "undefined") {
