@@ -1,10 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Plus, Search, Phone, Sparkles, Trash2 } from "lucide-react";
+import { Plus, Search, Phone, Sparkles, Trash2, Wand2, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAllCharacters } from "@/lib/use-characters";
-import { deleteCustomCharacter } from "@/lib/character-generation.functions";
+import { CHARACTERS } from "@/lib/characters";
+import { deleteCustomCharacter, pregenerateBuiltin } from "@/lib/character-generation.functions";
 
 export const Route = createFileRoute("/select")({
   component: Select,
@@ -15,8 +16,11 @@ function Select() {
   const [query, setQuery] = useState("");
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const { all, isLoading } = useAllCharacters();
+  const [pregenerating, setPregenerating] = useState(false);
+  const [pregenStatus, setPregenStatus] = useState<string | null>(null);
+  const { all, isLoading, missingBuiltinNames } = useAllCharacters();
   const removeFn = useServerFn(deleteCustomCharacter);
+  const pregenFn = useServerFn(pregenerateBuiltin);
   const qc = useQueryClient();
 
   const filtered = all.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()));
@@ -32,6 +36,31 @@ function Select() {
       setDeletingId(null);
       setPendingDelete(null);
     }
+  };
+
+  const runPregenerate = async () => {
+    setPregenerating(true);
+    setPregenStatus(null);
+    const targets = CHARACTERS.filter((c) => missingBuiltinNames.includes(c.name));
+    let done = 0;
+    for (const c of targets) {
+      setPregenStatus(`Génération ${++done}/${targets.length} : ${c.name}…`);
+      try {
+        await pregenFn({
+          data: {
+            name: c.name,
+            era: c.era,
+            userContext: `${c.title}. ${c.systemPrompt}`,
+          },
+        });
+        await qc.invalidateQueries({ queryKey: ["custom-characters"] });
+      } catch (err) {
+        console.error("Pregenerate failed:", c.name, err);
+        setPregenStatus(`Échec pour ${c.name} : ${err instanceof Error ? err.message : "erreur"}`);
+      }
+    }
+    setPregenerating(false);
+    setPregenStatus((s) => s ?? "Animations prêtes ✨");
   };
 
   return (
@@ -51,6 +80,26 @@ function Select() {
         />
       </div>
 
+      {(missingBuiltinNames.length > 0 || pregenStatus) && (
+        <div className="animate-fade-up mt-4 flex items-center justify-between gap-3 rounded-2xl border border-gold/30 bg-gold/5 px-4 py-3 backdrop-blur" style={{ animationDelay: "0.12s" }}>
+          <div className="flex-1">
+            <p className="text-xs uppercase tracking-[0.25em] text-gold">Animations</p>
+            <p className="mt-1 text-sm text-foreground">
+              {pregenStatus ?? `${missingBuiltinNames.length} personnage(s) sans avatar animé`}
+            </p>
+          </div>
+          {missingBuiltinNames.length > 0 && (
+            <button
+              onClick={runPregenerate}
+              disabled={pregenerating}
+              className="flex items-center gap-2 rounded-full bg-gold px-3 py-2 text-xs font-medium uppercase tracking-wider text-background disabled:opacity-60"
+            >
+              {pregenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
+              {pregenerating ? "En cours…" : "Pré-générer"}
+            </button>
+          )}
+        </div>
+      )}
       <ul className="mt-6 divide-y divide-border rounded-2xl border border-border bg-card/30 backdrop-blur">
         {filtered.map((c, i) => (
           <li
