@@ -802,63 +802,17 @@ ${lang === "en" ? `You are ${char.name}.` : `Tu es ${char.name}.`} ${languageDir
 
 ${reactionInstruction}`;
 
-    // Try Pioneer first, fall back to OpenAI (ChatGPT) if it fails
+    // Pioneer (primary) + ChatGPT fallback via shared helper
     const messagesForLlm = [
       { role: "system", content: system },
       ...data.messages,
     ];
 
-    let content: string | undefined;
-    let pioneerError: string | null = null;
-    try {
-      if (!apiKey) throw new Error("Pioneer non configuré");
-      const res = await fetch("https://api.pioneer.ai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: "3143d855-95b1-4da7-afad-d579fcd3d5ed",
-          messages: messagesForLlm,
-          stream: false,
-        }),
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(`Pioneer ${res.status}: ${txt.slice(0, 300)}`);
-      }
-      const json = await res.json();
-      content = json.choices?.[0]?.message?.content;
-      if (!content) throw new Error("Réponse Pioneer vide.");
-    } catch (err) {
-      pioneerError = err instanceof Error ? err.message : "Pioneer indisponible";
-      console.warn("[chat] Pioneer failed, falling back to ChatGPT:", pioneerError);
-      const openaiKey = process.env.ChatGPT;
-      if (!openaiKey) {
-        throw new Error(`Pioneer indisponible et fallback ChatGPT non configuré : ${pioneerError}`);
-      }
-      const res2 = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${openaiKey}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: messagesForLlm,
-          response_format: { type: "json_object" },
-          temperature: 0.8,
-        }),
-      });
-      if (!res2.ok) {
-        const txt = await res2.text();
-        throw new Error(`Pioneer KO (${pioneerError}) + ChatGPT ${res2.status}: ${txt.slice(0, 200)}`);
-      }
-      const json2 = await res2.json();
-      content = json2.choices?.[0]?.message?.content;
-      if (!content) throw new Error(`Pioneer KO (${pioneerError}) + ChatGPT réponse vide.`);
-    }
+    const content = await callLlm({
+      messages: messagesForLlm,
+      jsonMode: true,
+      temperature: 0.8,
+    });
 
     // Extract JSON object even if model wraps it in prose / markdown
     let parsed: { reply?: string; reactionIdx?: number } = {};
