@@ -564,7 +564,7 @@ function Chat() {
         )}
         {last?.role === "user" && (
           <div className="animate-fade-up text-center">
-            <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">Vous avez dit</p>
+            <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">{t("you_said")}</p>
             <p className="mt-2 max-w-xl text-lg italic text-foreground/90">« {last.content} »</p>
           </div>
         )}
