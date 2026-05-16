@@ -1,9 +1,9 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { Mic, Keyboard, History, Film, Bookmark, PhoneOff, Send, X, Loader2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Mic, MicOff, Keyboard, History, Film, Bookmark, PhoneOff, Send, X, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useCharacter } from "@/lib/use-characters";
-import { chatWithCharacter, synthesizeSpeech } from "@/lib/character-generation.functions";
+import { chatWithCharacter, synthesizeSpeech, transcribeAudio } from "@/lib/character-generation.functions";
 import type { Reaction } from "@/lib/characters";
 import { AvatarSvg, type AvatarState } from "@/components/AvatarSvg";
 
@@ -85,8 +85,15 @@ function Chat() {
 
   const chat = useServerFn(chatWithCharacter);
   const speak = useServerFn(synthesizeSpeech);
+  const transcribe = useServerFn(transcribeAudio);
   const isCustom = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
 
   if (isLoading) {
     return (
