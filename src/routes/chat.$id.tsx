@@ -372,7 +372,7 @@ function Chat() {
     } catch (err) {
       setIsTranscribing(false);
       const raw = err instanceof Error ? err.message : "Transcription échouée";
-      const isFormat = /unsupported content type|Format audio non supporté|Gradium STT \d+/i.test(raw);
+      const isFormat = /unsupported content type|Format audio non supporté|SLNG STT \d+|Gradium STT \d+/i.test(raw);
       setMicError(
         isFormat
           ? "Le service de transcription n'a pas pu lire l'audio. Réessayez l'envoi ou recommencez l'enregistrement."
