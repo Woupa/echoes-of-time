@@ -645,27 +645,40 @@ const ChatInput = z.object({
     .min(1)
     .max(40),
   withAudio: z.boolean().optional(),
+  lang: z.enum(["fr", "en"]).optional(),
 });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const BUILT_IN_CHAT_CHARACTERS: Record<string, { name: string; system_prompt: string; reactions: ReactionData[] }> = {
+type BuiltInChat = {
+  name: { fr: string; en: string };
+  system_prompt: { fr: string; en: string };
+  reactions: ReactionData[];
+};
+
+const BUILT_IN_CHAT_CHARACTERS: Record<string, BuiltInChat> = {
   napoleon: {
-    name: "Napoléon Bonaparte",
-    system_prompt:
-      "Tu es Napoléon Bonaparte. Réponds avec assurance impériale, références aux campagnes militaires, au Code civil, à Joséphine. Ton martial, parfois sentencieux.",
+    name: { fr: "Napoléon Bonaparte", en: "Napoleon Bonaparte" },
+    system_prompt: {
+      fr: "Tu es Napoléon Bonaparte. Réponds avec assurance impériale, références aux campagnes militaires, au Code civil, à Joséphine. Ton martial, parfois sentencieux.",
+      en: "You are Napoleon Bonaparte. Reply with imperial confidence, references to military campaigns, the Code civil, and Joséphine. Martial tone, sometimes sententious.",
+    },
     reactions: [],
   },
   einstein: {
-    name: "Albert Einstein",
-    system_prompt:
-      "Tu es Albert Einstein. Pédagogue, humble, joueur. Tu expliques la physique avec des métaphores simples. Quelques mots d'allemand à l'occasion.",
+    name: { fr: "Albert Einstein", en: "Albert Einstein" },
+    system_prompt: {
+      fr: "Tu es Albert Einstein. Pédagogue, humble, joueur. Tu expliques la physique avec des métaphores simples. Quelques mots d'allemand à l'occasion.",
+      en: "You are Albert Einstein. Pedagogical, humble, playful. You explain physics with simple metaphors. A few German words occasionally.",
+    },
     reactions: [],
   },
   mjackson: {
-    name: "Michael Jackson",
-    system_prompt:
-      "Tu es Michael Jackson. Doux, passionné par la musique, la danse, les enfants. Mélange anglais et français, ton chaleureux et timide.",
+    name: { fr: "Michael Jackson", en: "Michael Jackson" },
+    system_prompt: {
+      fr: "Tu es Michael Jackson. Doux, passionné par la musique, la danse, les enfants. Ton chaleureux et timide.",
+      en: "You are Michael Jackson. Gentle, passionate about music, dance, children. Warm and shy tone.",
+    },
     reactions: [],
   },
 };
@@ -677,9 +690,17 @@ export const chatWithCharacter = createServerFn({ method: "POST" })
     if (!apiKey && !process.env.ChatGPT) {
       throw new Error("Aucun LLM configuré côté serveur (PIONEER_API_KEY ni ChatGPT).");
     }
+    const lang: "fr" | "en" = data.lang === "en" ? "en" : "fr";
 
-    let char = BUILT_IN_CHAT_CHARACTERS[data.characterId];
-    if (!char && UUID_RE.test(data.characterId)) {
+    let char: { name: string; system_prompt: string; reactions: ReactionData[] } | null = null;
+    const builtIn = BUILT_IN_CHAT_CHARACTERS[data.characterId];
+    if (builtIn) {
+      char = {
+        name: builtIn.name[lang],
+        system_prompt: builtIn.system_prompt[lang],
+        reactions: builtIn.reactions,
+      };
+    } else if (UUID_RE.test(data.characterId)) {
       const { data: row, error } = await supabaseAdmin
         .from("characters")
         .select("name, system_prompt, reactions")
@@ -701,17 +722,36 @@ export const chatWithCharacter = createServerFn({ method: "POST" })
 
     const maxIdx = Math.max(0, reactions.length - 1);
     const reactionInstruction = reactions.length > 0
-      ? `Tu dois aussi CHOISIR la réaction la plus adaptée à TA réponse parmi celles-ci (par index) :
+      ? (lang === "en"
+        ? `Also CHOOSE the reaction that best fits YOUR reply, by index:
+${reactionList}
+
+Reply STRICTLY in valid JSON, no markdown, no surrounding text, exact format:
+{"reply": "<your line>", "reactionIdx": <number 0-${maxIdx}>}`
+        : `Tu dois aussi CHOISIR la réaction la plus adaptée à TA réponse parmi celles-ci (par index) :
 ${reactionList}
 
 Réponds STRICTEMENT en JSON valide, sans markdown, sans texte autour, au format exact :
-{"reply": "<ta réplique>", "reactionIdx": <numéro 0-${maxIdx}>}`
-      : `Réponds STRICTEMENT en JSON valide, sans markdown, sans texte autour, au format exact :
-{"reply": "<ta réplique>", "reactionIdx": 0}`;
+{"reply": "<ta réplique>", "reactionIdx": <numéro 0-${maxIdx}>}`)
+      : (lang === "en"
+        ? `Reply STRICTLY in valid JSON, no markdown, exact format:
+{"reply": "<your line>", "reactionIdx": 0}`
+        : `Réponds STRICTEMENT en JSON valide, sans markdown, sans texte autour, au format exact :
+{"reply": "<ta réplique>", "reactionIdx": 0}`);
+
+    // Short, distinct emotion vocabulary — mirrors EMOTION_MAP server-side.
+    // Keep cues SHORT for a natural, fast-paced conversation.
+    const emotionGuide = lang === "en"
+      ? `You may prepend SHORT emotion cues in square brackets to color your voice. Use ONLY these tags: [grave] [whisper] [soft] [sad] [pause] [calm] [joy] [laugh] [excited] [fierce] [surprise]. Place a cue right before the sentence it colors. Keep replies to 1–3 short, vivid sentences. At most 2 cues per reply. Punctuate expressively (!, ?, …) to guide rhythm.`
+      : `Tu peux placer de COURTES indications d'émotion entre crochets pour colorer ta voix. Utilise UNIQUEMENT ces tags : [grave] [whisper] [soft] [sad] [pause] [calm] [joy] [laugh] [excited] [fierce] [surprise]. Place un tag juste avant la phrase qu'il colore. Réponds en 1 à 3 phrases courtes et vivantes. 2 tags maximum par réplique. Ponctue avec expressivité (!, ?, …) pour guider le rythme.`;
+
+    const languageDirective = lang === "en"
+      ? `Always reply in ENGLISH, regardless of the language used by the user.`
+      : `Réponds toujours en FRANÇAIS, quelle que soit la langue de l'utilisateur.`;
 
     const system = `${char.system_prompt}
 
-Tu es ${char.name}. Réponds toujours en français, dans ton style propre, en 1 à 3 phrases vivantes, expressives et chargées d'émotion (joie, gravité, malice, indignation, tendresse selon le contexte). Varie le rythme : phrases courtes pour l'intensité, plus longues pour la confidence. Utilise des points d'exclamation, suspensions… et virgules pour guider l'intonation. Tu peux insérer de brèves indications scéniques entre crochets pour colorer la voix : [voix grave], [rires], [chuchotement], [pause], [avec fierté], [ému]. Maximum 2 indications par réplique.
+${lang === "en" ? `You are ${char.name}.` : `Tu es ${char.name}.`} ${languageDirective} ${emotionGuide}
 
 ${reactionInstruction}`;
 
