@@ -31,6 +31,9 @@ async function callLlm(opts: {
           model: PIONEER_MODEL,
           messages: opts.messages,
           stream: false,
+          max_tokens: 4096,
+          temperature: opts.temperature ?? 0.7,
+          ...(opts.jsonMode ? { response_format: { type: "json_object" } } : {}),
         }),
       });
       if (!res.ok) {
@@ -38,6 +41,8 @@ async function callLlm(opts: {
         throw new Error(`Pioneer ${res.status}: ${txt.slice(0, 200)}`);
       }
       const j = await res.json();
+      const finish = j.choices?.[0]?.finish_reason;
+      if (finish === "length") throw new Error("Pioneer réponse tronquée (max_tokens)");
       const content = j.choices?.[0]?.message?.content;
       if (!content) throw new Error("Pioneer réponse vide");
       return content as string;
