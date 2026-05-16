@@ -109,7 +109,7 @@ function Chat() {
     const nextMessages: Message[] = [...messages, { role: "user", content: trimmed }];
     setMessages(nextMessages);
     setInput("");
-    setIsSpeaking(true);
+    setIsThinking(true);
 
     try {
       if (isCustom && reactions.length > 0) {
@@ -117,7 +117,9 @@ function Chat() {
         const { reply, reactionIdx } = await chat({
           data: { characterId: id, messages: history },
         });
+        setIsThinking(false);
         setCurrentReactionIdx(reactionIdx);
+        if (/[!?]/.test(reply)) setReactingTick((n) => n + 1);
         setMessages((m) => [
           ...m,
           { role: "assistant", content: reply, reactionIdx },
@@ -127,6 +129,7 @@ function Chat() {
         const nextIdx = reactions.length > 0 ? Math.floor(Math.random() * reactions.length) : 0;
         setCurrentReactionIdx(nextIdx);
         const reactionLabel = reactions[nextIdx]?.label ?? "";
+        setIsThinking(false);
         setMessages((m) => [
           ...m,
           {
@@ -137,6 +140,7 @@ function Chat() {
         ]);
       }
     } catch (err) {
+      setIsThinking(false);
       setMessages((m) => [
         ...m,
         {
@@ -144,8 +148,6 @@ function Chat() {
           content: `Désolé, une erreur est survenue : ${err instanceof Error ? err.message : "inconnue"}`,
         },
       ]);
-    } finally {
-      setIsSpeaking(false);
     }
   };
 
