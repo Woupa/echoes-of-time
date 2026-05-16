@@ -607,7 +607,7 @@ function Chat() {
                   disabled={isTranscribing}
                   className="rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/20 disabled:opacity-50"
                 >
-                  {isTranscribing ? "Nouvelle tentative…" : "Réessayer"}
+                  {isTranscribing ? t("retry_loading") : t("retry")}
                 </button>
               )}
               <button
@@ -615,7 +615,7 @@ function Chat() {
                 onClick={() => setMicError(null)}
                 className="rounded-md border border-destructive/30 px-2 py-1 text-[11px] font-medium text-destructive/80 hover:bg-destructive/10"
               >
-                Fermer
+                {t("close")}
               </button>
             </div>
           </div>
