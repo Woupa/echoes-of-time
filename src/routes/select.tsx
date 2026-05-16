@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Plus, Search, Phone } from "lucide-react";
+import { Plus, Search, Phone, Sparkles } from "lucide-react";
 import { useState } from "react";
-import { CHARACTERS } from "@/lib/characters";
+import { useAllCharacters } from "@/lib/use-characters";
 
 export const Route = createFileRoute("/select")({
   component: Select,
@@ -10,10 +10,9 @@ export const Route = createFileRoute("/select")({
 function Select() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
+  const { all, isLoading } = useAllCharacters();
 
-  const filtered = CHARACTERS.filter((c) =>
-    c.name.toLowerCase().includes(query.toLowerCase()),
-  );
+  const filtered = all.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()));
 
   return (
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 pb-12 pt-10">
@@ -56,6 +55,11 @@ function Select() {
                   loading="lazy"
                   className="relative h-14 w-14 rounded-full object-cover ring-1 ring-border"
                 />
+                {c.isCustom && (
+                  <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-gold text-background">
+                    <Sparkles className="h-3 w-3" />
+                  </span>
+                )}
               </div>
               <div className="flex-1">
                 <p className="font-display text-lg text-foreground">{c.name}</p>
@@ -68,9 +72,13 @@ function Select() {
           </li>
         ))}
 
+        {isLoading && (
+          <li className="px-4 py-6 text-center text-xs text-muted-foreground">Chargement des contacts…</li>
+        )}
+
         <li className="animate-fade-up" style={{ animationDelay: `${0.15 + filtered.length * 0.06}s` }}>
           <button
-            onClick={() => navigate({ to: "/call/$id", params: { id: "custom" } })}
+            onClick={() => navigate({ to: "/create" })}
             className="flex w-full items-center gap-4 px-4 py-4 text-left transition-colors hover:bg-accent/40"
           >
             <div className="flex h-14 w-14 items-center justify-center rounded-full border border-dashed border-gold/50 text-gold">
@@ -78,7 +86,7 @@ function Select() {
             </div>
             <div className="flex-1">
               <p className="font-display text-lg text-gold">Créer un personnage</p>
-              <p className="text-xs text-muted-foreground">Définissez nom, époque, personnalité</p>
+              <p className="text-xs text-muted-foreground">L'IA génère personnalité, voix et 6 réactions</p>
             </div>
           </button>
         </li>
