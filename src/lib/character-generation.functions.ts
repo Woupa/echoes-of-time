@@ -467,9 +467,6 @@ async function generateSvgAvatar(args: {
   basePortraitPrompt: string;
   accent: string;
 }): Promise<string> {
-  const apiKey = process.env.ChatGPT;
-  if (!apiKey) throw new Error("Clé ChatGPT manquante côté serveur.");
-
   const system = `Tu es un illustrateur SVG cartoon 2D flat (style Duolingo / Bitmoji). Tu produis UNIQUEMENT un SVG brut (commence par <svg ... et finit par </svg>), aucun texte, aucun markdown, aucune balise <html>.
 
 Spec OBLIGATOIRE :
@@ -496,29 +493,19 @@ Identifie 2 à 3 éléments iconiques non-négociables propres à ce personnage 
 
 Retourne UNIQUEMENT le SVG.`;
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      temperature: 0.7,
-    }),
+  let svg = await callLlm({
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    temperature: 0.7,
   });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`OpenAI SVG ${res.status}: ${txt.slice(0, 200)}`);
-  }
-  const j = await res.json();
-  let svg: string = j.choices?.[0]?.message?.content ?? "";
+
   // Strip markdown code fences if present
   svg = svg.replace(/^```(?:svg|xml)?\s*/i, "").replace(/```\s*$/i, "").trim();
   const start = svg.indexOf("<svg");
   const end = svg.lastIndexOf("</svg>");
-  if (start === -1 || end === -1) throw new Error("SVG invalide retourné par ChatGPT.");
+  if (start === -1 || end === -1) throw new Error("SVG invalide retourné par le LLM.");
   return svg.slice(start, end + 6);
 }
 
