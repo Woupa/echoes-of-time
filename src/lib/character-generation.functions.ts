@@ -377,7 +377,7 @@ export const listCustomCharacters = createServerFn({ method: "GET" })
   });
 
 const ChatInput = z.object({
-  characterId: z.string().uuid(),
+  characterId: z.string().min(1).max(120),
   messages: z
     .array(
       z.object({
@@ -389,18 +389,50 @@ const ChatInput = z.object({
     .max(40),
 });
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const BUILT_IN_CHAT_CHARACTERS: Record<string, { name: string; system_prompt: string; reactions: ReactionData[] }> = {
+  napoleon: {
+    name: "Napoléon Bonaparte",
+    system_prompt:
+      "Tu es Napoléon Bonaparte. Réponds avec assurance impériale, références aux campagnes militaires, au Code civil, à Joséphine. Ton martial, parfois sentencieux.",
+    reactions: [],
+  },
+  einstein: {
+    name: "Albert Einstein",
+    system_prompt:
+      "Tu es Albert Einstein. Pédagogue, humble, joueur. Tu expliques la physique avec des métaphores simples. Quelques mots d'allemand à l'occasion.",
+    reactions: [],
+  },
+  mjackson: {
+    name: "Michael Jackson",
+    system_prompt:
+      "Tu es Michael Jackson. Doux, passionné par la musique, la danse, les enfants. Mélange anglais et français, ton chaleureux et timide.",
+    reactions: [],
+  },
+};
+
 export const chatWithCharacter = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => ChatInput.parse(input))
   .handler(async ({ data }) => {
     const apiKey = process.env.PIONEER_API_KEY;
     if (!apiKey) throw new Error("Clé Pioneer manquante côté serveur.");
 
-    const { data: char, error } = await supabaseAdmin
-      .from("characters")
-      .select("name, system_prompt, reactions")
-      .eq("id", data.characterId)
-      .single();
-    if (error || !char) throw new Error(`Personnage introuvable : ${error?.message}`);
+    let char = BUILT_IN_CHAT_CHARACTERS[data.characterId];
+    if (!char && UUID_RE.test(data.characterId)) {
+      const { data: row, error } = await supabaseAdmin
+        .from("characters")
+        .select("name, system_prompt, reactions")
+        .eq("id", data.characterId)
+        .single();
+      if (error || !row) throw new Error(`Personnage introuvable : ${error?.message}`);
+      char = {
+        name: row.name,
+        system_prompt: row.system_prompt,
+        reactions: (row.reactions as ReactionData[]) ?? [],
+      };
+    }
+    if (!char) throw new Error("Personnage introuvable.");
 
     const reactions = (char.reactions as ReactionData[]) ?? [];
     const reactionList = reactions
@@ -408,15 +440,20 @@ export const chatWithCharacter = createServerFn({ method: "POST" })
       .join("\n");
 
     const maxIdx = Math.max(0, reactions.length - 1);
+    const reactionInstruction = reactions.length > 0
+      ? `Tu dois aussi CHOISIR la réaction la plus adaptée à TA réponse parmi celles-ci (par index) :
+${reactionList}
+
+Réponds STRICTEMENT en JSON valide, sans markdown, sans texte autour, au format exact :
+{"reply": "<ta réplique>", "reactionIdx": <numéro 0-${maxIdx}>}`
+      : `Réponds STRICTEMENT en JSON valide, sans markdown, sans texte autour, au format exact :
+{"reply": "<ta réplique>", "reactionIdx": 0}`;
+
     const system = `${char.system_prompt}
 
 Tu es ${char.name}. Réponds toujours en français, dans ton style propre, en 1 à 3 phrases vivantes.
 
-Tu dois aussi CHOISIR la réaction la plus adaptée à TA réponse parmi celles-ci (par index) :
-${reactionList}
-
-Réponds STRICTEMENT en JSON valide, sans markdown, sans texte autour, au format exact :
-{"reply": "<ta réplique>", "reactionIdx": <numéro 0-${maxIdx}>}`;
+${reactionInstruction}`;
 
     const res = await fetch("https://api.pioneer.ai/v1/chat/completions", {
       method: "POST",
