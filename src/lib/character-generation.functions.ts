@@ -509,6 +509,7 @@ ${reactionInstruction}`;
     let content: string | undefined;
     let pioneerError: string | null = null;
     try {
+      if (!apiKey) throw new Error("Pioneer non configuré");
       const res = await fetch("https://api.pioneer.ai/v1/chat/completions", {
         method: "POST",
         headers: {
