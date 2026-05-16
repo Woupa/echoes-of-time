@@ -138,7 +138,14 @@ function Chat() {
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const recordedSamplesRef = useRef<Float32Array[]>([]);
 
-  if (isLoading) {
+  // Redirect to /auth when not authenticated so conversations can be saved
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate({ to: "/auth" });
+    }
+  }, [authLoading, user, navigate]);
+
+  if (isLoading || authLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-gold" />
