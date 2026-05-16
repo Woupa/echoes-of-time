@@ -253,7 +253,7 @@ function Chat() {
           }
           const b64 = btoa(bin);
           const { text } = await transcribe({
-            data: { audioBase64: b64, mime: blob.type || "audio/webm" },
+            data: { audioBase64: b64, mime: cleanType },
           });
           setIsTranscribing(false);
           if (text) await send(text);
