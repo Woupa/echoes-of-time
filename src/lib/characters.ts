@@ -1,9 +1,6 @@
 import napoleon from "@/assets/napoleon.jpg";
 import einstein from "@/assets/einstein.jpg";
-import degaulle from "@/assets/degaulle.jpg";
-import oppenheimer from "@/assets/oppenheimer.jpg";
 import mj from "@/assets/mj.jpg";
-import tomcruise from "@/assets/tomcruise.jpg";
 
 export type Character = {
   id: string;
