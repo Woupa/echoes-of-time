@@ -553,7 +553,7 @@ Réponds STRICTEMENT en JSON valide, sans markdown, sans texte autour, au format
 
     const system = `${char.system_prompt}
 
-Tu es ${char.name}. Réponds toujours en français, dans ton style propre, en 1 à 3 phrases vivantes.
+Tu es ${char.name}. Réponds toujours en français, dans ton style propre, en 1 à 3 phrases vivantes, expressives et chargées d'émotion (joie, gravité, malice, indignation, tendresse selon le contexte). Varie le rythme : phrases courtes pour l'intensité, plus longues pour la confidence. Utilise des points d'exclamation, suspensions… et virgules pour guider l'intonation. Tu peux insérer de brèves indications scéniques entre crochets pour colorer la voix : [voix grave], [rires], [chuchotement], [pause], [avec fierté], [ému]. Maximum 2 indications par réplique.
 
 ${reactionInstruction}`;
 
