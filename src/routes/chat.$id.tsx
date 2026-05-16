@@ -272,7 +272,7 @@ function Chat() {
         setIsThinking(false);
         const aMsg: Message = {
           role: "assistant",
-          content: `(${character.name}${reactionLabel ? ` — ${reactionLabel}` : ""}) Connectez l'API LLM pour activer la réponse complète.`,
+          content: `(${character?.name ?? ""}${reactionLabel ? ` — ${reactionLabel}` : ""}) Connectez l'API LLM pour activer la réponse complète.`,
           reactionIdx: nextIdx,
         };
         setMessages((m) => [...m, aMsg]);
