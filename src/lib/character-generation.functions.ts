@@ -311,25 +311,41 @@ async function gradiumTtsRaw(voiceId: string, text: string, speed = 1.0): Promis
   }
 }
 
-// Multi-segment TTS: splits by stage directions, varies speed per emotion tag,
-// concatenates into a single WAV so the audio flows naturally as one stream.
+// Multi-segment TTS: splits by stage directions, BUCKETS consecutive segments
+// of the same speed into ONE Gradium call (using `<break time="..." />` for
+// the in-bucket emotional pauses), then concatenates the WAVs. This yields
+// fewer round-trips, faster first-byte, and a smoother natural delivery.
 async function gradiumTtsBase64(
   voiceId: string,
   rawText: string,
 ): Promise<{ audio: string; mime: string } | null> {
-  const segments = splitIntoEmotionSegments(rawText);
-  const filtered = segments.filter((s) => s.text.trim().length > 0);
-  if (filtered.length === 0) return null;
+  const segments = splitIntoEmotionSegments(rawText)
+    .map((s) => ({ ...s, emo: resolveEmotion(s.tag) }))
+    .filter((s) => s.text.trim().length > 0);
+  if (segments.length === 0) return null;
 
-  // Single segment → single call (faster path)
-  if (filtered.length === 1) {
-    const wav = await gradiumTtsRaw(voiceId, filtered[0].text, speedForTag(filtered[0].tag));
-    if (!wav) return null;
-    return concatWavs([wav]);
+  // Group consecutive segments by speed bucket.
+  type Bucket = { speed: number; text: string };
+  const buckets: Bucket[] = [];
+  for (const seg of segments) {
+    const last = buckets[buckets.length - 1];
+    // Gradium expects breaks between 0.1 and 2.0s, surrounded by spaces.
+    const pause = Math.min(Math.max(seg.emo.pause, 0.1), 2.0).toFixed(2);
+    const breakTag = ` <break time="${pause}s" /> `;
+    if (last && Math.abs(last.speed - seg.emo.speed) < 0.02) {
+      last.text += breakTag + seg.text;
+    } else {
+      buckets.push({ speed: seg.emo.speed, text: seg.text });
+    }
+  }
+
+  if (buckets.length === 1) {
+    const wav = await gradiumTtsRaw(voiceId, buckets[0].text, buckets[0].speed);
+    return wav ? concatWavs([wav]) : null;
   }
 
   const wavs = await Promise.all(
-    filtered.map((s) => gradiumTtsRaw(voiceId, s.text, speedForTag(s.tag))),
+    buckets.map((b) => gradiumTtsRaw(voiceId, b.text, b.speed)),
   );
   const valid = wavs.filter((w): w is Uint8Array => w !== null);
   if (valid.length === 0) return null;
