@@ -22,6 +22,7 @@ function Select() {
   const removeFn = useServerFn(deleteCustomCharacter);
   const qc = useQueryClient();
   const { user } = useAuth();
+  const { t } = useT();
 
   const filtered = all.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()));
 
