@@ -23,6 +23,7 @@ function mergeBuiltinWithTwin(builtin: Character, twin?: Character): Character {
     avatar: twin.avatar || builtin.avatar,
     reactions: twin.reactions ?? builtin.reactions,
     svgAvatar: twin.svgAvatar ?? builtin.svgAvatar,
+    twinId: twin.id,
     // keep built-in id, accent, greeting, systemPrompt
   };
 }
