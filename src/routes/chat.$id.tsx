@@ -17,6 +17,38 @@ export const Route = createFileRoute("/chat/$id")({
 
 type Message = { role: "user" | "assistant"; content: string; saved?: boolean; reactionIdx?: number };
 
+const RECORDING_SAMPLE_RATE = 24_000;
+
+function encodeWav(samples: Float32Array, sampleRate: number) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+  const writeString = (offset: number, value: string) => {
+    for (let i = 0; i < value.length; i++) view.setUint8(offset + i, value.charCodeAt(i));
+  };
+
+  writeString(0, "RIFF");
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeString(8, "WAVE");
+  writeString(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeString(36, "data");
+  view.setUint32(40, samples.length * 2, true);
+
+  let offset = 44;
+  for (const sample of samples) {
+    const clamped = Math.max(-1, Math.min(1, sample));
+    view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
+    offset += 2;
+  }
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
 function Chat() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
@@ -91,9 +123,11 @@ function Chat() {
   const transcribe = useServerFn(transcribeAudio);
   const isCustom = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const recordedChunksRef = useRef<Blob[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const recordedSamplesRef = useRef<Float32Array[]>([]);
 
   if (isLoading) {
     return (
@@ -200,81 +234,91 @@ function Chat() {
     }
   };
 
+  const stopPcmRecording = useCallback(async () => {
+    const stream = mediaStreamRef.current;
+    const context = audioContextRef.current;
+    const sampleRate = context?.sampleRate ?? RECORDING_SAMPLE_RATE;
+    processorRef.current?.disconnect();
+    sourceRef.current?.disconnect();
+    stream?.getTracks().forEach((t) => t.stop());
+    mediaStreamRef.current = null;
+    processorRef.current = null;
+    sourceRef.current = null;
+    audioContextRef.current = null;
+    setIsRecording(false);
+
+    if (context && context.state !== "closed") await context.close();
+
+    const chunks = recordedSamplesRef.current;
+    recordedSamplesRef.current = [];
+    const sampleCount = chunks.reduce((total, chunk) => total + chunk.length, 0);
+    if (sampleCount < RECORDING_SAMPLE_RATE / 4) return;
+
+    const samples = new Float32Array(sampleCount);
+    let offset = 0;
+    for (const chunk of chunks) {
+      samples.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    const blob = encodeWav(samples, sampleRate);
+    setIsTranscribing(true);
+    try {
+      const buf = await blob.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let bin = "";
+      const CH = 0x8000;
+      for (let i = 0; i < bytes.length; i += CH) {
+        bin += String.fromCharCode(...bytes.subarray(i, i + CH));
+      }
+      const b64 = btoa(bin);
+      const { text } = await transcribe({
+        data: { audioBase64: b64, mime: "audio/wav" },
+      });
+      setIsTranscribing(false);
+      if (text) await send(text);
+    } catch (err) {
+      setIsTranscribing(false);
+      setMicError(err instanceof Error ? err.message : "Transcription échouée");
+    }
+  }, [send, transcribe]);
+
   const stopRecording = useCallback(() => {
-    const mr = mediaRecorderRef.current;
-    if (mr && mr.state !== "inactive") mr.stop();
-  }, []);
+    void stopPcmRecording();
+  }, [stopPcmRecording]);
 
   const startRecording = useCallback(async () => {
     setMicError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
-      recordedChunksRef.current = [];
+      recordedSamplesRef.current = [];
 
-      // Gradium STT rejects codec parameters (e.g. "audio/webm;codecs=opus").
-      // Prefer container-only MIME types it accepts.
-      const mimeCandidates = [
-        "audio/mp4",
-        "audio/webm",
-        "audio/ogg",
-      ];
-      const supported = mimeCandidates.find((m) =>
-        typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported?.(m),
-      );
-      const mr = new MediaRecorder(stream, supported ? { mimeType: supported } : undefined);
-      mediaRecorderRef.current = mr;
-
-      mr.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
+      const AudioContextClass = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) throw new Error("Enregistrement audio non supporté par ce navigateur");
+      const context = new AudioContextClass({ sampleRate: RECORDING_SAMPLE_RATE });
+      const source = context.createMediaStreamSource(stream);
+      const processor = context.createScriptProcessor(4096, 1, 1);
+      processor.onaudioprocess = (event) => {
+        recordedSamplesRef.current.push(new Float32Array(event.inputBuffer.getChannelData(0)));
       };
-      mr.onstop = async () => {
-        const tracks = mediaStreamRef.current?.getTracks() ?? [];
-        tracks.forEach((t) => t.stop());
-        mediaStreamRef.current = null;
-        setIsRecording(false);
-
-        const chunks = recordedChunksRef.current;
-        if (chunks.length === 0) return;
-        const rawType = mr.mimeType || "audio/webm";
-        // Strip codec parameter — Gradium rejects "audio/webm;codecs=opus".
-        const cleanType = rawType.split(";")[0].trim() || "audio/webm";
-        const blob = new Blob(chunks, { type: cleanType });
-        if (blob.size < 800) return; // too short
-
-        setIsTranscribing(true);
-        try {
-          const buf = await blob.arrayBuffer();
-          const bytes = new Uint8Array(buf);
-          let bin = "";
-          const CH = 0x8000;
-          for (let i = 0; i < bytes.length; i += CH) {
-            bin += String.fromCharCode(...bytes.subarray(i, i + CH));
-          }
-          const b64 = btoa(bin);
-          const { text } = await transcribe({
-            data: { audioBase64: b64, mime: cleanType },
-          });
-          setIsTranscribing(false);
-          if (text) await send(text);
-        } catch (err) {
-          setIsTranscribing(false);
-          setMicError(err instanceof Error ? err.message : "Transcription échouée");
-        }
-      };
-
-      mr.start();
+      source.connect(processor);
+      processor.connect(context.destination);
+      audioContextRef.current = context;
+      sourceRef.current = source;
+      processorRef.current = processor;
       setIsRecording(true);
     } catch (err) {
       setMicError(err instanceof Error ? err.message : "Accès micro refusé");
       setIsRecording(false);
     }
-  }, [transcribe]);
+  }, []);
 
   useEffect(() => {
     return () => {
-      const mr = mediaRecorderRef.current;
-      if (mr && mr.state !== "inactive") mr.stop();
+      processorRef.current?.disconnect();
+      sourceRef.current?.disconnect();
+      void audioContextRef.current?.close();
       mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);

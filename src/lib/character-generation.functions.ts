@@ -526,7 +526,7 @@ export const synthesizeSpeech = createServerFn({ method: "POST" })
 
 const TranscribeInput = z.object({
   audioBase64: z.string().min(10).max(15_000_000),
-  mime: z.string().min(3).max(60).default("audio/webm"),
+  mime: z.string().min(3).max(60).default("audio/wav"),
 });
 
 export const transcribeAudio = createServerFn({ method: "POST" })
@@ -535,19 +535,33 @@ export const transcribeAudio = createServerFn({ method: "POST" })
     const apiKey = process.env.Gradium;
     if (!apiKey) throw new Error("Clé Gradium manquante côté serveur.");
 
+    const cleanMime = data.mime.split(";")[0].trim().toLowerCase();
+    const inputFormatByMime: Record<string, string> = {
+      "audio/wav": "wav",
+      "audio/wave": "wav",
+      "audio/x-wav": "wav",
+      "audio/ogg": "opus",
+      "audio/opus": "opus",
+      "audio/pcm": "pcm",
+    };
+    const inputFormat = inputFormatByMime[cleanMime];
+    if (!inputFormat) {
+      throw new Error(`Format audio non supporté par Gradium STT: ${cleanMime}. Utilisez WAV/PCM ou Ogg Opus.`);
+    }
+
     // base64 -> bytes
     const binary = atob(data.audioBase64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-    const cfg = encodeURIComponent(JSON.stringify({ language: "fr" }));
+    const cfg = encodeURIComponent(JSON.stringify({ language: "fr", input_format: inputFormat }));
     const res = await fetch(
-      `https://api.gradium.ai/api/post/speech/asr?json_config=${cfg}`,
+      `https://api.gradium.ai/api/post/speech/asr?json_config=${cfg}&input_format=${inputFormat}`,
       {
         method: "POST",
         headers: {
           "x-api-key": apiKey,
-          "Content-Type": data.mime,
+          "Content-Type": cleanMime === "audio/wave" || cleanMime === "audio/x-wav" ? "audio/wav" : cleanMime,
         },
         body: bytes,
       },
