@@ -731,9 +731,11 @@ ${reactionInstruction}`;
         try { parsed = JSON.parse(match[0]); } catch { /* ignore */ }
       }
     }
-    const reply = typeof parsed.reply === "string" && parsed.reply.trim().length > 0
+    const rawReply = typeof parsed.reply === "string" && parsed.reply.trim().length > 0
       ? parsed.reply
       : content.trim();
+    // Strip stage directions from displayed reply (audio still uses raw for emotion cues)
+    const reply = stripStageDirections(rawReply);
     const idx = Number.isInteger(parsed.reactionIdx)
       ? Math.max(0, Math.min(maxIdx, parsed.reactionIdx as number))
       : 0;
@@ -741,7 +743,7 @@ ${reactionInstruction}`;
     // Generate TTS in the same response when requested (saves a round-trip)
     if (data.withAudio) {
       const voiceId = await resolveVoiceId(data.characterId);
-      const tts = await gradiumTtsBase64(voiceId, reply);
+      const tts = await gradiumTtsBase64(voiceId, rawReply);
       if (tts) return { reply, reactionIdx: idx, audio: tts.audio, mime: tts.mime };
     }
     return { reply, reactionIdx: idx, audio: null as string | null, mime: null as string | null };
