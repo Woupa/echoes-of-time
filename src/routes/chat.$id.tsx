@@ -475,8 +475,8 @@ function Chat() {
         <div className="flex items-center gap-2">
           <button
             onClick={toggleMute}
-            aria-label={muted ? "Réactiver la voix" : "Couper la voix"}
-            title={muted ? "Réactiver la voix" : "Couper la voix"}
+            aria-label={muted ? t("voice_off") : t("voice_on")}
+            title={muted ? t("voice_off") : t("voice_on")}
             className={`flex h-10 w-10 items-center justify-center rounded-full border backdrop-blur transition-colors ${muted ? "border-destructive/50 bg-destructive/15 text-destructive" : "border-gold/40 bg-card/60 text-gold hover:bg-accent"}`}
           >
             {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
@@ -490,32 +490,33 @@ function Chat() {
           <div>
             <p className="font-display text-lg leading-tight">{character.name}</p>
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-              {muted ? "Voix coupée" : isSpeaking ? "Parle…" : "En ligne · Pionnier"}
+              {muted ? t("voice_muted") : isSpeaking ? t("speaking") : t("online")}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <LangToggle />
           <button
             onClick={handleShare}
             disabled={sharing}
             className="flex items-center gap-1.5 rounded-full border border-gold/40 bg-card/60 px-3 py-1.5 text-xs text-gold backdrop-blur hover:bg-accent disabled:opacity-50"
-            aria-label="Partager la conversation"
+            aria-label={t("share")}
           >
             {sharing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : shareCopied ? <Check className="h-3.5 w-3.5" /> : <Share2 className="h-3.5 w-3.5" />}
-            {shareCopied ? "Copié" : "Partager"}
+            {shareCopied ? t("copied") : t("share")}
           </button>
           <Link
             to="/"
             className="flex items-center gap-1.5 rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs backdrop-blur hover:bg-accent"
-            aria-label="Retour à l'accueil"
+            aria-label={t("home")}
           >
-            <Home className="h-3.5 w-3.5" /> Accueil
+            <Home className="h-3.5 w-3.5" /> {t("home")}
           </Link>
           <button
             onClick={() => setShowHistory(true)}
             className="rounded-full border border-border bg-card/60 px-3 py-1.5 text-xs backdrop-blur"
           >
-            Historique
+            {t("history")}
           </button>
         </div>
       </header>
@@ -523,7 +524,7 @@ function Chat() {
       {/* Share link toast */}
       {shareUrl && (
         <div className="absolute left-1/2 top-20 z-30 -translate-x-1/2 max-w-md rounded-xl border border-gold/40 bg-card/95 px-4 py-3 text-xs shadow-cinema backdrop-blur">
-          <p className="mb-1 font-medium text-gold">Lien de partage {shareCopied && "(copié)"}</p>
+          <p className="mb-1 font-medium text-gold">{t("share_link")} {shareCopied && `(${t("copied")})`}</p>
           <div className="flex items-center gap-2">
             <input
               readOnly
@@ -535,18 +536,18 @@ function Chat() {
               onClick={() => { void navigator.clipboard.writeText(shareUrl).then(() => { setShareCopied(true); setTimeout(() => setShareCopied(false), 1500); }); }}
               className="rounded-md border border-gold/40 px-2 py-1 text-[11px] text-gold hover:bg-accent"
             >
-              Copier
+              {t("share_copy")}
             </button>
             <button
               onClick={() => setShareUrl(null)}
               className="rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent"
-              aria-label="Fermer"
+              aria-label={t("close")}
             >
               <X className="h-3 w-3" />
             </button>
           </div>
           <p className="mt-2 text-[10px] text-muted-foreground">
-            Toute personne avec ce lien pourra lire la conversation.
+            {t("share_hint")}
           </p>
         </div>
       )}
