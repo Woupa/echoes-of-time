@@ -92,53 +92,32 @@ Choisis les 6 réactions qui révèlent VRAIMENT ce personnage (ex pour Einstein
   return parsed;
 }
 
-type GradiumVoice = {
-  uid: string;
-  name: string;
-  description?: string | null;
-  language?: string | null;
-  tags?: { name?: string; value?: string }[];
-};
+// SLNG Rime Arcana v2 French speakers (catalogue SLNG-hosted)
+const SLNG_FR_SPEAKERS = [
+  { id: "destin", description: "voix masculine grave, posée, autoritaire — figure d'autorité, leader, homme mûr" },
+  { id: "serrin_joseph", description: "voix masculine chaleureuse, narrative, intellectuelle — savant, écrivain, mentor" },
+  { id: "solstice", description: "voix féminine claire, lumineuse, élégante — figure inspirante, artiste, jeune femme" },
+  { id: "livet_aurelie", description: "voix féminine douce, expressive, sensible — confidente, poétesse, héroïne romantique" },
+  { id: "morel_marianne", description: "voix féminine mature, posée, sage — matriarche, conseillère, femme d'expérience" },
+] as const;
 
-async function listGradiumVoices(): Promise<GradiumVoice[]> {
-  const apiKey = process.env.Gradium;
-  if (!apiKey) throw new Error("Clé Gradium manquante côté serveur.");
-  const res = await fetch(
-    "https://api.gradium.ai/api/voices/?include_catalog=true&limit=200",
-    { headers: { "x-api-key": apiKey } },
-  );
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`Gradium voices ${res.status}: ${txt.slice(0, 200)}`);
-  }
-  return (await res.json()) as GradiumVoice[];
-}
-
-async function pickVoiceWithGpt(args: {
+async function pickSlngSpeakerWithGpt(args: {
   name: string;
   era: string;
   userContext: string;
   basePortraitPrompt: string;
-  voices: GradiumVoice[];
 }): Promise<string> {
   const apiKey = process.env.ChatGPT;
   if (!apiKey) throw new Error("Clé ChatGPT manquante côté serveur.");
 
-  const compact = args.voices.map((v) => ({
-    uid: v.uid,
-    name: v.name,
-    language: v.language ?? null,
-    description: (v.description ?? "").slice(0, 160),
-  }));
-
-  const system = `Tu es directeur de casting vocal. On te donne un personnage et une liste de voix (catalogue TTS). Choisis LA voix la plus adaptée à son époque, sa langue (préférer 'fr' si le personnage parle français, sinon 'en'), son genre et son tempérament. Réponds STRICTEMENT en JSON : {"uid": "<voice uid>"}.`;
+  const system = `Tu es directeur de casting vocal pour un TTS français (Rime Arcana via SLNG). À partir d'un personnage, choisis LA voix la plus adaptée (genre, âge, tempérament, époque). Réponds STRICTEMENT en JSON : {"speaker": "<id>"}.`;
   const user = `Personnage : ${args.name}
 Époque : ${args.era}
 Contexte : ${args.userContext}
 Description visuelle : ${args.basePortraitPrompt}
 
-Voix disponibles (JSON) :
-${JSON.stringify(compact)}`;
+Voix disponibles :
+${SLNG_FR_SPEAKERS.map((v) => `- ${v.id} : ${v.description}`).join("\n")}`;
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -158,9 +137,9 @@ ${JSON.stringify(compact)}`;
     throw new Error(`OpenAI voix ${res.status}: ${txt.slice(0, 200)}`);
   }
   const j = await res.json();
-  const parsed = JSON.parse(j.choices?.[0]?.message?.content ?? "{}") as { uid?: string };
-  const chosen = args.voices.find((v) => v.uid === parsed.uid);
-  return (chosen ?? args.voices[0]).uid;
+  const parsed = JSON.parse(j.choices?.[0]?.message?.content ?? "{}") as { speaker?: string };
+  const valid = SLNG_FR_SPEAKERS.some((v) => v.id === parsed.speaker);
+  return valid ? (parsed.speaker as string) : "serrin_joseph";
 }
 
 async function generateFalImage(prompt: string): Promise<ArrayBuffer> {
@@ -240,21 +219,16 @@ export const generateCharacter = createServerFn({ method: "POST" })
     const characterId = inserted.id as string;
 
     try {
-      // 3) Choix de la voix Gradium en parallèle des images
-      const voicesPromise = listGradiumVoices()
-        .then((voices) =>
-          pickVoiceWithGpt({
-            name,
-            era,
-            userContext,
-            basePortraitPrompt: plan.basePortraitPrompt,
-            voices,
-          }),
-        )
-        .catch((err) => {
-          console.error("Voice pick failed:", err);
-          return null;
-        });
+      // 3) Choix de la voix SLNG (Rime Arcana FR) en parallèle des images
+      const voicesPromise = pickSlngSpeakerWithGpt({
+        name,
+        era,
+        userContext,
+        basePortraitPrompt: plan.basePortraitPrompt,
+      }).catch((err: unknown) => {
+        console.error("Voice pick failed:", err);
+        return null;
+      });
 
       // 4) Générer le portrait de base + 6 réactions en parallèle
       const cinematicSuffix =
@@ -409,8 +383,8 @@ const SpeakInput = z.object({
 export const synthesizeSpeech = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => SpeakInput.parse(input))
   .handler(async ({ data }) => {
-    const apiKey = process.env.Gradium;
-    if (!apiKey) throw new Error("Clé Gradium manquante côté serveur.");
+    const apiKey = process.env.SLNG;
+    if (!apiKey) throw new Error("Clé SLNG manquante côté serveur.");
 
     const { data: char, error } = await supabaseAdmin
       .from("characters")
@@ -418,27 +392,27 @@ export const synthesizeSpeech = createServerFn({ method: "POST" })
       .eq("id", data.characterId)
       .single();
     if (error || !char) throw new Error(`Personnage introuvable : ${error?.message}`);
-    const voiceId = (char.voice_id as string | null) ?? "YTpq7expH9539ERJ";
+    const stored = (char.voice_id as string | null) ?? "serrin_joseph";
+    const speaker = SLNG_FR_SPEAKERS.some((v) => v.id === stored) ? stored : "serrin_joseph";
 
-    const res = await fetch("https://api.gradium.ai/api/post/speech/tts", {
+    const res = await fetch("https://api.slng.ai/v1/tts/slng/rime/arcana:fr", {
       method: "POST",
       headers: {
-        "x-api-key": apiKey,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        Accept: "audio/mpeg",
       },
       body: JSON.stringify({
         text: data.text,
-        voice_id: voiceId,
-        output_format: "wav",
-        only_audio: true,
+        speaker,
+        config: { encoding: "mp3", sample_rate: 24000 },
       }),
     });
     if (!res.ok) {
       const txt = await res.text();
-      throw new Error(`Gradium TTS ${res.status}: ${txt.slice(0, 200)}`);
+      throw new Error(`SLNG TTS ${res.status}: ${txt.slice(0, 200)}`);
     }
     const buf = await res.arrayBuffer();
-    // base64 encode
     const bytes = new Uint8Array(buf);
     let binary = "";
     const chunk = 0x8000;
@@ -446,5 +420,5 @@ export const synthesizeSpeech = createServerFn({ method: "POST" })
       binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
     }
     const base64 = btoa(binary);
-    return { audio: base64, mime: "audio/wav" };
+    return { audio: base64, mime: "audio/mpeg" };
   });
